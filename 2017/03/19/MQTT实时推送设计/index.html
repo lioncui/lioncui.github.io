@@ -1,0 +1,76 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description"><title>MQTT实时推送设计 | LionCui的IT二三事</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/7.0.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/1.0.0/grids-responsive-min.css"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">MQTT实时推送设计</h1><a id="logo" href="/.">LionCui的IT二三事</a><p class="description">分享与记录</p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/about/"><i class="fa fa-user"> 关于</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">MQTT实时推送设计</h1><div class="post-meta">Mar 19, 2017</div><div class="post-content"><h2 id="设计分析"><a href="#设计分析" class="headerlink" title="设计分析"></a>设计分析</h2><p>​    目前主流的web应用服务, 一般都是采用无状态的Restful API 接口, 所用操作都基于HTTP请求完成. 一些外围设备(比如手机、电器、机顶盒等等)与API接口交互获取数据, 都是主动请求形式. 换言之, 所有后台的修改(修改配置、开关服务等等), 终端都只能在下一次请求时进行更新, 存在一定有时差性.</p>
+<p>那么现在这种终端主动请求的方式不能完全满足业务发展需求, 迫切需要一种可靠的实时的消息推送服务.</p>
+<p>对于该消息服务,需要尽可能满足以下条件:</p>
+<ul>
+<li>网络资源消耗低, 机台工作环境低带宽</li>
+<li>轻量级易集成, 代码改造小,尽量以模块形式</li>
+<li>支持跨平台, 需要支持Android、IOS等等</li>
+</ul>
+<p>基于上述要求, <code>MQTT</code>这种轻量级的物联网协议消息服务可满足.</p>
+<h2 id="关于MQTT"><a href="#关于MQTT" class="headerlink" title="关于MQTT"></a>关于MQTT</h2><p>​    <a href="http://mqtt.org/" target="_blank" rel="noopener">MQTT</a>是一个物联网传输协议,它被设计用于轻量级的发布/订阅式消息传输,旨在为低带宽和不稳定的网络环境中的物联网设备提供可靠的网络服务.MQTT是专门针对物联网开发的轻量级传输协议.MQTT协议针对低带宽网络,低计算能力的设备,做了特殊的优化,使得其能适应各种物联网应用场景.目前MQTT拥有各种平台和设备上的客户端,已经形成了初步的生态系统.</p>
+<p>​    MQTT的设计思想是开源、可靠、轻巧、简单,MQTT的传输格式非常精小,最小的数据包只有2个比特,且无应用消息头.MQTT可以保证消息的可靠性,它包括三种不同的服务质量（最多只传一次、最少被传一次、一次且只传一次）,如果客户端意外掉线,可以使用“遗愿”发布一条消息,同时支持持久订阅.MQTT在物联网以及移动应用中的优势有：</p>
+<ul>
+<li>可靠传输.MQTT可以保证消息可靠安全的传输,并可以与企业应用简易集成.</li>
+<li>消息推送.支持消息实时通知、丰富的推送内容、灵活的Pub-Sub以及消息存储和过滤.</li>
+<li>低带宽、低耗能、低成本.占用移动应用程序带宽小,并且带宽利用率高,耗电量较少.</li>
+</ul>
+<h2 id="设计说明"><a href="#设计说明" class="headerlink" title="设计说明"></a>设计说明</h2><p>本文设计是针对一种终端为<code>无人售货机</code>的推送,所以围绕着<code>配置管理</code> 、<code>价格更新</code>、<code>库存更新</code>这些常见服务.</p>
+<p>同理无论终端<code>手机</code>、<code>机顶盒</code>或者<code>共享单车</code>等等一些具有物联性的设备, 都可以根本改设计思路来进行改良, 本文仅仅做抛砖引玉.</p>
+<p>设计时围绕以下几点进行:</p>
+<ul>
+<li>中立性<ul>
+<li>MQTT服务, 属于终端与服务端的中间件(类似现实生活中的邮局)</li>
+</ul>
+</li>
+<li>无角色<ul>
+<li>无论终端或者服务器都可以是<code>消费者</code>或<code>生产者</code> (任何人或者单位都是邮寄和收件)</li>
+</ul>
+</li>
+<li>非匿名<ul>
+<li>MQTT服务使用<code>非匿名模式</code>配合<code>访问控制列表(ACL)</code>, 即只有提供认证的设备对权限内的TOPIC进行读/写</li>
+</ul>
+</li>
+<li>可控性<ul>
+<li>多设备接入时, 消息可以精准推送到某一设备或某一组设备(多个)</li>
+</ul>
+</li>
+</ul>
+<p>特别是<code>可控性</code> 部分, 这是设计的关键.</p>
+<blockquote>
+<p>每个终端设备都有唯一设备号(device_id), 多种设备可能属于不同的用户或者部门(operator_id).</p>
+<p>像设计API一样设计topic, 那么可以实现出<code>公有</code>和<code>私有</code>两种topic</p>
+</blockquote>
+<p>ACL配置如下</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">user device</span><br><span class="line">pattern <span class="built_in">read</span> /devices/%c</span><br><span class="line">pattern <span class="built_in">read</span> /operators/<span class="comment">#</span></span><br><span class="line"></span><br><span class="line">user server</span><br><span class="line">pattern write /devices/<span class="comment">#</span></span><br><span class="line">pattern write /operators/<span class="comment">#</span></span><br></pre></td></tr></table></figure>
+<p>终端设备使用device用户, 登录时<code>device_id</code>作为mqtt 会话中的<code>client_id</code>, 使用该用户具有两个主题的读取权限.</p>
+<p>服务端使用server用户, 使用该用户具有两个主题的写入权限.</p>
+<h2 id="代理选型"><a href="#代理选型" class="headerlink" title="代理选型"></a>代理选型</h2><p>​    目前支持MQTT协议的消息代理比较多,包括Mosquitto, RabbitMQ等等.参考性能分析<a href="http://acro-engineer.hatenablog.com/entry/2015/06/30/100507" target="_blank" rel="noopener">MQTT Broker Performance</a> ,最终决定选型<a href="https://mosquitto.org/" target="_blank" rel="noopener">MOSQUITTO</a>.</p>
+<ul>
+<li>性能优秀</li>
+<li>支持多Broker桥接</li>
+<li>开源代码(SDK支持C/Python/Go/Java/Nodejs 等等)</li>
+<li>丰富的官方文档支持</li>
+</ul>
+<h2 id="架构拓扑"><a href="#架构拓扑" class="headerlink" title="架构拓扑"></a>架构拓扑</h2><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Device-&gt;MQTT: subscribe topic</span><br><span class="line">Note right of Server: call the APIs</span><br><span class="line">Server--&gt;MQTT: public message</span><br><span class="line">MQTT--&gt;Device: receive message</span><br><span class="line">Note left of Device: logical processing</span><br></pre></td></tr></table></figure>
+<h2 id="使用说明"><a href="#使用说明" class="headerlink" title="使用说明"></a>使用说明</h2><p>​    设备通过MQTT客户端<a href="https://eclipse.org/paho/downloads.php" target="_blank" rel="noopener">PAHO-MQTT</a>发起连接消息代理, 根据配置指定账号密码作为认证, 成功连接后分别订阅/<code>devices/&lt;device_id&gt;</code> 和 <code>/operators/&lt;operator_id&gt;</code> 两个topic.其中设备topic为当前机台私有,仅收到发给自己的消息, 运营商topic为设备共有, 同一运营商下的所有机台都会收到相同消息.设备对公私有topic都只具有读取权限.</p>
+<p>以更新商品价格为例, 设计推送私有消息例子:</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">  <span class="attr">"uuid"</span>: <span class="string">"0a71b58182324abcb8453bbed2340d2b"</span>,</span><br><span class="line">  <span class="attr">"method"</span>: <span class="string">"device.product.put"</span>,</span><br><span class="line">  <span class="attr">"response"</span>: &#123;</span><br><span class="line">    <span class="attr">"id"</span>: <span class="string">"78bfa0d163114ffb9458ee11015e5c0f"</span>,</span><br><span class="line">    <span class="attr">"price"</span>: <span class="number">200</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>​ </p>
+<ul>
+<li><code>uuid</code> 本次消息的唯一ID, 服务器与终端都可以记录保存.</li>
+<li><code>method</code> 像API一样, topic是统一的接口网关, 那么这里就是具体接口描述</li>
+<li><code>response</code> 本次消息的内容</li>
+</ul>
+<p>由于消息跨平台, 我们不希望消息以明文的方式传输, 于是进行base64编码, 这样可以保证消息全部为可见字符, 避免了在不同语言环境下因为字符ACSII引起的各种问题.</p>
+<p>那么消息例子进化为</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">eyJyZXNwb25zZSI6IHsicHJpY2UiOiAyMDAsICJpZCI6ICI3OGJmYTBkMTYzMTE0ZmZiOTQ1OGVlMTEwMTVlNWMwZiJ9LCAidXVpZCI6ICIwYTcxYjU4MTgyMzI0YWJjYjg0NTNiYmVkMjM0MGQyYiIsICJtZXRob2QiOiAiZGV2aWNlLnByb2R1Y3QucHV0In0=</span><br></pre></td></tr></table></figure>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><blockquote>
+<p> 像设计Restful API风格 一样设计 TOPIC</p>
+</blockquote>
+</div><div class="tags"><a href="/tags/MQTT/">MQTT</a></div><div class="post-nav"><a class="next" href="/2017/03/01/Golang为Python编写模块/">Golang为Python编写模块</a></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/Golang/" style="font-size: 15px;">Golang</a> <a href="/tags/Python/" style="font-size: 15px;">Python</a> <a href="/tags/Openstack/" style="font-size: 15px;">Openstack</a> <a href="/tags/Linux/" style="font-size: 15px;">Linux</a> <a href="/tags/MQTT/" style="font-size: 15px;">MQTT</a> <a href="/tags/Ceph/" style="font-size: 15px;">Ceph</a> <a href="/tags/Docker/" style="font-size: 15px;">Docker</a> <a href="/tags/VMware/" style="font-size: 15px;">VMware</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2017/03/19/MQTT实时推送设计/">MQTT实时推送设计</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/03/01/Golang为Python编写模块/">Golang为Python编写模块</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/05/06/Tkinter引入图标/">Tkinter如何引入图标</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/04/05/VPNaaS服务说明/">VPNaaS服务说明</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/03/22/LBaaS服务说明/">LBaaS服务说明</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/09/15/nova集成docker部署/">Nova集成Docker过程记录</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/07/23/自定义创建Openstack镜像(Windows)/">自定义制作Windows2008R2 nova镜像</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/07/23/自定义制作centos6.6镜像/">自定义制作centos6.6 nova镜像</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/04/07/openstack_i版本部署10/">Openstack I版部署安装(十)</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/04/06/openstack_i版本部署9/">Openstack I版部署安装(九)</a></li></ul></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2018 <a href="/." rel="nofollow">LionCui的IT二三事.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><script type="text/javascript" src="//cdn.bootcss.com/fancybox/3.2.5/jquery.fancybox.min.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/fancybox/3.2.5/jquery.fancybox.min.css"><script type="text/javascript" src="/js/search.js?v=0.0.0"></script><script>var search_path = 'search.xml';
+if (search_path.length == 0) {
+   search_path = 'search.xml';
+}
+var path = '/' + search_path;
+searchFunc(path, 'local-search-input', 'local-search-result');
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
