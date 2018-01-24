@@ -1,0 +1,1037 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search> 
+  
+    
+    <entry>
+      <title><![CDATA[Golang为Python编写模块]]></title>
+      <url>/2017/03/01/Golang%E4%B8%BAPython%E7%BC%96%E5%86%99%E6%A8%A1%E5%9D%97/</url>
+      <content type="html"><![CDATA[<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>​    由于公司的Python项目中有比较关于支付签名与验签的模块, 基于安全性考虑, 希望改用C/C++或者Go 来重构该部分模块,做到加解签过程透明,上层代码只需要关心结果. 整个过程都是边踩坑边完成,下面以简易代码来记录一下整个过程的思路.</p>
+<h2 id="记录"><a href="#记录" class="headerlink" title="记录"></a>记录</h2><p>​    Go里面需要显示的引入<code>C</code>模块, 让编译器支持生成动态链接库, 并且在代码中可以使用C语言的数据类型,这个至关重要. <a href="http://savorywatt.com/2015/09/18/calling-go-code-from-python-code/" target="_blank" rel="noopener">Calling Go code from Python code</a> 摘取一个最简单例子</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//libadd.go</span></span><br><span class="line"><span class="keyword">package</span> main</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> <span class="string">"C"</span></span><br><span class="line"></span><br><span class="line"><span class="comment">//export add</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">add</span><span class="params">(left, right <span class="keyword">int</span>)</span> <span class="title">int</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> left + right</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">go build -buildmode=c-shared -o libadd.so libadd.go</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> ctypes <span class="keyword">import</span> cdll</span><br><span class="line">lib = cdll.LoadLibrary(<span class="string">'./libadd.so'</span>)</span><br><span class="line">print(<span class="string">"Loaded go generated SO library"</span>)</span><br><span class="line">result = lib.add(<span class="number">2</span>, <span class="number">3</span>)</span><br><span class="line">print(result)</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>The cgo export command is documented in <a href="https://golang.org/cmd/cgo/" target="_blank" rel="noopener"><code>go doc cgo</code></a>, section <a href="https://golang.org/cmd/cgo/#hdr-C_references_to_Go" target="_blank" rel="noopener">“C references to Go”</a>. Essentially, write <code>//export FUNCNAME</code> before the function definition</p>
+</blockquote>
+<p>需要显式注释<code>//export add</code> 把 add函数公开给C调用</p>
+<p>本以为很简单的的我, 兴致满满地把例子改一下, 改为简单的处理字符串的时候, 发现怕跑不起来了. </p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//libadd.go</span></span><br><span class="line"><span class="keyword">package</span> main</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> <span class="string">"C"</span></span><br><span class="line"></span><br><span class="line"><span class="comment">//export add</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">add</span><span class="params">(left, right <span class="keyword">string</span>)</span> <span class="title">string</span></span> &#123;</span><br><span class="line">	<span class="keyword">return</span> left + right</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> ctypes <span class="keyword">import</span> CDLL</span><br><span class="line">lib = CDLL(<span class="string">'./libadd.so'</span>)</span><br><span class="line">print(<span class="string">"Loaded go generated SO library"</span>)</span><br><span class="line">result = lib.add(<span class="string">"Hello"</span>, <span class="string">"World"</span>)</span><br><span class="line">print(result)</span><br></pre></td></tr></table></figure>
+<ul>
+<li><p>这时候运行是出错的</p>
+<p>再次翻看资料发现这么一句话:</p>
+</li>
+</ul>
+<blockquote>
+<p>The python code is really short and this is only passing an integer back and forth (more complex string and struct cases are much more challenging).</p>
+</blockquote>
+<p>这说明处理字符串的时候并不是简单改成<code>string</code>类型就可以.这时候翻开了<a href="https://blog.filippo.io/building-python-modules-with-go-1-5/" target="_blank" rel="noopener">BUILDING PYTHON MODULES WITH GO 1.5</a> , 这时能找到的最全面的资料, 可惜里面的过程都过于复杂, 整个思路是用Go去写C code, 类似写解释器一样, 去抽象出PyObject然后按照API标准来注册、处理、返回.我仅是希望以<code>动态链接库</code> 的方式来能调用就可以了.</p>
+<p>我开始思考, 为何例子中使用<code>int</code>类型就可以, 我改成一个简单的接收<code>string</code> 返回<code>string</code> 却一直失败. py是利用<code>ctypes</code>来跟so模块进行交互, 这里存在一个代码的翻译过程 <code>Py -&gt; C -&gt; Go</code>, 我能想到的对于字符串数据类型的处理不一样原因引起(后面事实证明了我的猜想).那么思考一下, Py中的字符串传递到Go里面去使用什么类型来接收呢? 所有答案在<a href="https://docs.python.org/3.5/library/ctypes.html" target="_blank" rel="noopener">Python Doc</a> 官网关于<code>ctypes</code>模块中有能找到.我们来参考对应表格:</p>
+<table>
+<thead>
+<tr>
+<th>ctypes type</th>
+<th>C type</th>
+<th>Python type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_bool" target="_blank" rel="noopener">c_bool</a></td>
+<td><code>_Bool</code></td>
+<td>bool (1)</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_char" target="_blank" rel="noopener">c_char</a></td>
+<td><code>char</code></td>
+<td>1-character bytes object</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_wchar" target="_blank" rel="noopener">c_wchar</a></td>
+<td><code>wchar_t</code></td>
+<td>1-character string</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_byte" target="_blank" rel="noopener">c_byte</a></td>
+<td><code>char</code></td>
+<td>int</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_ubyte" target="_blank" rel="noopener">c_ubyte</a></td>
+<td><code>unsigned char</code></td>
+<td>int</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_short" target="_blank" rel="noopener">c_short</a></td>
+<td><code>short</code></td>
+<td>int</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_ushort" target="_blank" rel="noopener">c_ushort</a></td>
+<td><code>unsigned short</code></td>
+<td>int</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_int" target="_blank" rel="noopener">c_int</a></td>
+<td><code>int</code></td>
+<td>int</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_uint" target="_blank" rel="noopener">c_uint</a></td>
+<td><code>unsigned int</code></td>
+<td>int</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_long" target="_blank" rel="noopener"><code>c_long</code></a></td>
+<td><code>long</code></td>
+<td>int</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_ulong" target="_blank" rel="noopener"><code>c_ulong</code></a></td>
+<td><code>unsigned long</code></td>
+<td>int</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_longlong" target="_blank" rel="noopener"><code>c_longlong</code></a></td>
+<td><code>__int64</code> or <code>long long</code></td>
+<td>int</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_ulonglong" target="_blank" rel="noopener"><code>c_ulonglong</code></a></td>
+<td><code>unsigned __int64</code> or <code>unsigned long long</code></td>
+<td>int</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_size_t" target="_blank" rel="noopener"><code>c_size_t</code></a></td>
+<td><code>size_t</code></td>
+<td>int</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_ssize_t" target="_blank" rel="noopener"><code>c_ssize_t</code></a></td>
+<td><code>ssize_t</code> or <code>Py_ssize_t</code></td>
+<td>int</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_float" target="_blank" rel="noopener"><code>c_float</code></a></td>
+<td><code>float</code></td>
+<td>float</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_double" target="_blank" rel="noopener"><code>c_double</code></a></td>
+<td><code>double</code></td>
+<td>float</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_longdouble" target="_blank" rel="noopener"><code>c_longdouble</code></a></td>
+<td><code>long double</code></td>
+<td>float</td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_char_p" target="_blank" rel="noopener"><code>c_char_p</code></a></td>
+<td><code>char *</code> (NUL terminated)</td>
+<td>bytes object or <code>None</code></td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_wchar_p" target="_blank" rel="noopener"><code>c_wchar_p</code></a></td>
+<td><code>wchar_t *</code> (NUL terminated)</td>
+<td>string or <code>None</code></td>
+</tr>
+<tr>
+<td><a href="https://docs.python.org/3.5/library/ctypes.html#ctypes.c_void_p" target="_blank" rel="noopener"><code>c_void_p</code></a></td>
+<td><code>void *</code></td>
+<td>int or <code>None</code></td>
+</tr>
+</tbody>
+</table>
+<p>这里可以很清楚的看到Python3 <code>ctypes</code>中字符串 <code>bytes</code> 和 <code>string</code> 是对应的两种指针类型.同时提供了<code>argtypes</code> 和 <code>restype</code> 来显式转换动态链接库中函数的参数和返回类型.(参考<a href="http://stackoverflow.com/questions/27127413/converting-python-string-object-to-c-char-using-ctypes" target="_blank" rel="noopener">StackOverFlow</a>)</p>
+<p>这这时候再改一下代码</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//libadd.go</span></span><br><span class="line"><span class="keyword">package</span> main</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> <span class="string">"C"</span></span><br><span class="line"></span><br><span class="line"><span class="comment">//export add</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">add</span><span class="params">(left, right *C.char)</span> *<span class="title">C</span>.<span class="title">char</span></span> &#123;</span><br><span class="line">  	<span class="comment">// bytes对应ctypes的c_char_p类型,翻译成C类型就是 char *指针</span></span><br><span class="line">  	merge := C.GoString(left) + C.GoString(right)</span><br><span class="line">	<span class="keyword">return</span> C.CString(merge)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">main</span><span class="params">()</span></span> &#123;&#125;</span><br></pre></td></tr></table></figure>
+<p>重新编译</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">go build -buildmode=c-shared -o libadd.so libadd.go</span><br></pre></td></tr></table></figure>
+<p>Python中引用</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> ctypes</span><br><span class="line">add = ctypes.CDLL(<span class="string">'./libadd.so'</span>).add</span><br><span class="line"><span class="comment"># 显式声明参数和返回的期望类型</span></span><br><span class="line">add.argtypes = [ctypes.c_char_p, ctypes.c_char_p]</span><br><span class="line">add.restype = ctypes.c_char_p</span><br><span class="line">left = <span class="string">b"Hello"</span></span><br><span class="line">right = <span class="string">b"World"</span></span><br><span class="line">print(add(left, right))</span><br></pre></td></tr></table></figure>
+<p>正确输出结果:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">b<span class="string">"HelloWorld"</span></span><br></pre></td></tr></table></figure>
+<p>那么这时候我就可以开始模块的编写了, 只要关注传入参数和返回结果的数据类型处理, Go模块中函数内部实现该怎么写还是怎么写.关于 cgo更多的信息, 可以查阅<a href="https://golang.org/cmd/cgo/" target="_blank" rel="noopener">Golang.org</a></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><ol>
+<li>Python与Go之间的参数传递, 处理非INT型时需要都转为对应的C类型</li>
+<li>ctypes需要显式地声明DLL函数的参数和返回期望的数据类型</li>
+<li>注意在Python3中字符串bytes和string的区别</li>
+<li>Go模块需要<code>//export</code> 声明外部可调用</li>
+<li>Go处理C的类型是需要显式转换</li>
+</ol>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Golang </tag>
+            
+            <tag> Python </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Tkinter如何引入图标]]></title>
+      <url>/2016/05/06/Tkinter%E5%BC%95%E5%85%A5%E5%9B%BE%E6%A0%87/</url>
+      <content type="html"><![CDATA[<h2 id="描述"><a href="#描述" class="headerlink" title="描述"></a>描述</h2><p>在windows下开发python的gui程序时,多数使用pyinstaller, py2exe等打包工具.<br>在因为tkinter框架时,代码中使用iconbitmap引入程序框的图标样式,直接运行时没有问题,<br>但是在pyinstaller打包后会出现无法找到ico文件问题.<br>网上参考了几个解决方法都过于复杂(img2py, 或者修改spec打包参数)<br>下面我为大家带来一个非常方便可行的办法.</p>
+<h2 id="解决方法"><a href="#解决方法" class="headerlink" title="解决方法"></a>解决方法</h2><p>项目有两个文件分别是tk程序和图标文件</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">hello.py</span><br><span class="line">icon.ico</span><br></pre></td></tr></table></figure>
+<p>hello.py源码用例</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> Tkinter <span class="keyword">import</span> *</span><br><span class="line">root = Tk()</span><br><span class="line">root.iconbitmap(<span class="string">"icon.ico"</span>)</span><br><span class="line">Label(root, text=<span class="string">"hello world"</span>).pack()</span><br><span class="line">root.mainloop()</span><br></pre></td></tr></table></figure>
+<p>运行后是一个简易的tk程序,左上角图标变为自定义的<code>icon.ico</code>文件</p>
+<p>为了适配pyinstaller能把icon文件引入,我们修改成程序,把<code>icon.ico</code> 修改为 <code>icon.py</code><br>当前目录下进入python shell,敲入以下命令</p>
+<ul>
+<li>以二进制方式打开<code>icon.ico</code></li>
+<li>进行base64编码转换</li>
+<li>以变量形式保存在<code>icon.py</code> 中</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> base64</span><br><span class="line">open_icon = open(<span class="string">"icon.ico"</span>,<span class="string">"rb"</span>)</span><br><span class="line">b64str = base64.b64encode(open_icon.read())</span><br><span class="line">open_icon.close()</span><br><span class="line">write_data = <span class="string">"img = '%s'"</span> % b64str</span><br><span class="line">f = open(<span class="string">"icon.py"</span>,<span class="string">"w+"</span>)</span><br><span class="line">f.write(wrte_data)</span><br><span class="line">f.close()</span><br></pre></td></tr></table></figure>
+<p>这里可以当前目录下出现了<code>icon.py</code> 文件,里面只有一行就是<code>img</code>变量等于一串<code>base64</code>编码<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">hello.py</span><br><span class="line">icon.ico</span><br><span class="line">icon.py</span><br></pre></td></tr></table></figure></p>
+<p>修改 hello.py源码,导入<code>icon.py</code>中的<code>img</code>, 创建一个临时的<code>tmp.ico</code>文件作为图标引入后删除即可<br><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> Tkinter <span class="keyword">import</span> *</span><br><span class="line"><span class="keyword">import</span> base64</span><br><span class="line"><span class="keyword">from</span> icon <span class="keyword">import</span> img</span><br><span class="line">root = Tk()</span><br><span class="line">tmp = open(<span class="string">"tmp.ico"</span>,<span class="string">"wb+"</span>)</span><br><span class="line">tmp.write(base64.b64decode(img))</span><br><span class="line">tmp.close()</span><br><span class="line">root.iconbitmap(<span class="string">"tmp.ico"</span>)</span><br><span class="line">os.remove(<span class="string">"tmp.ico"</span>)</span><br><span class="line">Label(root, text=<span class="string">"hello world"</span>).pack()</span><br><span class="line">root.mainloop()</span><br></pre></td></tr></table></figure></p>
+<p>最后就是pyinstaller打包<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pyinstaller -i icon.ico -w -F hello.py</span><br></pre></td></tr></table></figure></p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Python </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[VPNaaS服务说明]]></title>
+      <url>/2016/04/05/VPNaaS%E6%9C%8D%E5%8A%A1%E8%AF%B4%E6%98%8E/</url>
+      <content type="html"><![CDATA[<h1 id="VPNaaS服务说明"><a href="#VPNaaS服务说明" class="headerlink" title="VPNaaS服务说明"></a>VPNaaS服务说明</h1><h2 id="IPSec概念"><a href="#IPSec概念" class="headerlink" title="IPSec概念"></a>IPSec概念</h2><p>​    IPSec（Internet Protocol Security）是 IETF 制定的为保证在 Internet 上传送数据的安全保密性能的三层隧道加密协议.IPSec 在 IP 层对 IP 报文提供安全服务.IPSec 协议本身定义了如何在 IP 数据包中增加字段来保证 IP 包的完整性、私有性和真实性,以及如何加密数据包.使用 IPsec,数据就可以安全地在公网上传输.简单地说,IPsec 提供了两个主机之间、两个安全网关之间或主机和安全网关之间的保护.</p>
+<p>​    IPSec 协议:</p>
+<ol>
+<li>包括报文验证头协议AH(协议号51),供数据源认证、数据完整性校验和防报文重放功能</li>
+<li>报文安全封装协议ESP(协议号50),在AH之上,增加数据加密功能.</li>
+</ol>
+<p>​    IKE协议:</p>
+<ol>
+<li>使两个地点能够建立安全的连接,方法是使用事先共享的密钥或由一家认证机构管理的公钥基础结构(PKI)数字证书.</li>
+</ol>
+<p>​    IPSec 和 IKE 的关系:</p>
+<ol>
+<li>IKE是 UDP 之上的一个应用层协议,是 IPSEC 的信令协议</li>
+<li>IKE为 IPSEC 协商建立安全联盟,IPSEC 使用 IKE 建立的安全联盟对 IP 报文加密或验证处理.</li>
+<li>IPSEC 利用AH或者ESP在IP层对报文进行处理.</li>
+</ol>
+<p>​    IPSec传输模式</p>
+<ol>
+<li>transport - 适用于 pc to pc .</li>
+<li>tunnel - 适用于 site to site(ps - router, router - router)</li>
+</ol>
+<h2 id="VPNaaS使用"><a href="#VPNaaS使用" class="headerlink" title="VPNaaS使用"></a>VPNaaS使用</h2><ol>
+<li>创建配置IKE协议(包括名称, 算法, 生命周期等主要参数)</li>
+<li>创建配置IPSec协议(包括名称,算法,协议,生命周期等主要参数)</li>
+<li>创建配置VPN服务(选择对应的需要使用vpn的子网与对应的路由器)</li>
+<li>创建配置点对点链接(选择对应的IKE和IPSec和VPN服务,填写对端的路由ip)</li>
+</ol>
+<blockquote>
+<p>点对点链接需要双方同时建立,并且使用相同的IKE和IPSEC配置</p>
+</blockquote>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[LBaaS服务说明]]></title>
+      <url>/2016/03/22/LBaaS%E6%9C%8D%E5%8A%A1%E8%AF%B4%E6%98%8E/</url>
+      <content type="html"><![CDATA[<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>目前L版支持V1和V2两种服务,V1是常见的以haproxy作为插件的服务,V2是单独分离出来的一个专用项目- octavia</p>
+<blockquote>
+<p>关于fuel 8.0 上的 lbaas plugin ,官方的说是review这个plugin进入release ,所以目前没有支持.</p>
+<p><a href="https://answers.launchpad.net/fuel/+question/274014" target="_blank" rel="noopener">https://answers.launchpad.net/fuel/+question/274014</a></p>
+</blockquote>
+<h2 id="术语说明"><a href="#术语说明" class="headerlink" title="术语说明"></a>术语说明</h2><ul>
+<li><code>Driver</code><ul>
+<li>LBaas 采取 Driver 模型来支持多种物理的负载均衡器.LBaas 默认实现了 HAProxy Driver,同时,它也支持多个其他 vendor Driver</li>
+</ul>
+</li>
+<li><code>VIP</code><ul>
+<li>LBaas 对外提供服务的地址.VIP有自己的 IP 地址,而且一般都能通过公网进行访问.VIP负责将网络流量分发到各个Member</li>
+</ul>
+</li>
+<li><code>Pool</code><ul>
+<li>代表负载后端的虚拟机池.在以 HAProxy 为 Driver 的情况下,一个 Pool 对应着在一个独立的 Network NameSpace 中运行的 HAProxy 进程所管理的 backend.目前一个 Pool 只能有一个 VIP.</li>
+</ul>
+</li>
+<li><code>Member</code><ul>
+<li>Member 对应的是 Pool 里面处理网络请求的一个 OpenStack Nova 虚机.</li>
+</ul>
+</li>
+<li><code>Health Monitor</code><ul>
+<li>用来监测 Pool 里面 Member 的状态,支持 HTTP, TCP, 和 ping 等多种检测方法.在 Nuetron 中这是可选的,如果没有 Health Monitor, 那么Pool 会一直认为所有的 Member 都是 Active 状态,这样所有的 Member 会一直出现在 VIP 的分发列表中,哪怕 Member 对应的实例不能响应网络请求.这在实际应用中会造成负载均衡的响应异常</li>
+</ul>
+</li>
+</ul>
+<h2 id="使用"><a href="#使用" class="headerlink" title="使用"></a>使用</h2><ol>
+<li>创建负载均衡pool</li>
+<li>在pool中增加负载均衡的成员</li>
+<li>创建健康检查</li>
+<li>创建vip分配给pool</li>
+<li>分配floating ip给pool</li>
+</ol>
+<blockquote>
+<p>目前lbaas 无法做到按需启动或停止,只能删除<br>haproxy监控检查只支持http, https, tcp, 其中的ping检查等同于tcp检查</p>
+</blockquote>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Nova集成Docker过程记录]]></title>
+      <url>/2015/09/15/nova%E9%9B%86%E6%88%90docker%E9%83%A8%E7%BD%B2/</url>
+      <content type="html"><![CDATA[<h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>docker已经可以作为compute driver来使用，脱离了原来HEAT的模式，可以做到真正地使用nova来启动容器.<br>这里记录一下openstack Kilo + docker 1.8的集成过程.所有组件环境基于centos7.</p>
+<h2 id="安装docker"><a href="#安装docker" class="headerlink" title="安装docker"></a>安装docker</h2><p>在compute node节点上安装docker,强烈建议安装docker-engine 1.8,需要linux3.1的kernal版本,拥有较高的生产稳定性,并且有启动用户组,旧版的docker-io是没有用户组,集成的时候docker.sock的权限每次都是手工修改很不方便.<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">curl -sSL https://get.docker.com/ | sh</span><br><span class="line">usermod -aG docker nova</span><br><span class="line">systemctl <span class="built_in">enable</span> docker.service</span><br><span class="line">systemctl start docker.service</span><br></pre></td></tr></table></figure></p>
+<h2 id="安装novadocker"><a href="#安装novadocker" class="headerlink" title="安装novadocker"></a>安装novadocker</h2><p>直接从github上clone安装<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">pip install -e git+https://github.com/stackforge/nova-docker<span class="comment">#egg=novadocker</span></span><br><span class="line">cp -R src/etc/nova/rootwrap.d /etc/nova/</span><br><span class="line">chmod -R root.nova /etc/nova/rootwrap.d</span><br><span class="line"><span class="built_in">cd</span> src/novadocker/</span><br><span class="line">python setup.py install</span><br><span class="line">``` </span><br><span class="line"><span class="comment">## 配置nova调用docker驱动</span></span><br><span class="line">vi /etc/nova/nova.conf</span><br><span class="line">```bash</span><br><span class="line">compute_driver = novadocker.virt.docker.DockerDriver</span><br></pre></td></tr></table></figure></p>
+<h2 id="配置glance支持容器格式"><a href="#配置glance支持容器格式" class="headerlink" title="配置glance支持容器格式"></a>配置glance支持容器格式</h2><p>vi /etc/glance/glance-api.conf (修改后重启glance-api服务)<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">container_formats = ami,ari,aki,bare,ovf,docker</span><br></pre></td></tr></table></figure></p>
+<h2 id="Fix-bug设置"><a href="#Fix-bug设置" class="headerlink" title="Fix bug设置"></a>Fix bug设置</h2><p>由于novadocker开发的版本是基于nova比较新的版本，在现在发行的版本中使用会有一个BUG,下面是修复记录.</p>
+<p>1.重启openstack-nova-compute服务时提示没有找到oslo_log模块<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install oslo.log</span><br></pre></td></tr></table></figure></p>
+<p>2.重启openstack-nova-compute服务时提示没有找到hv_type模块<br>通过代码定位发现目前的版本中模块是nova.compute.hvtype<br>修改/usr/lib/python2.7/site-packages/novadocker/virt/docker/driver.py<br>把from nova.compute import hv_type 改为 from nova.compute import hvtype</p>
+<p>3.直接导入driver测试提示报错,CONF没有’my_ip’这个opt配置<br>通过代码排查发现目前的openstack是使用oslo.config这个模块包来做cfg的导入和导出<br>但是在novadocker整个项目里面使用的oslo_config这个独立的模块<br>修改driver.py, client.py, hostinfo.py, vifs.py模块<br>from oslo_config import cfg 改为 from oslo.config import cfg</p>
+<p>4.直接导入driver测试提示继续报错,没有找到hvtype.DOCKER属性<br>修改 /usr/lib/python2.7/site-packages/nova/compute/hvtype.py<br>在# specific ‘baremetal’ &amp; ‘fake’ then added in.下面增加<br>DOCKER=’docker’</p>
+<hr>
+<p><strong>此时启动openstack-nova-compute已经正常</strong></p>
+<h2 id="glance导入docker镜像"><a href="#glance导入docker镜像" class="headerlink" title="glance导入docker镜像"></a>glance导入docker镜像</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">docker pull hipache</span><br><span class="line">docker save hipache | glance image-create --is-public=True --container-format=docker --disk-format=raw --name hipache</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>需要注意的是glance导入后的名字一定要和docker images下显示的名字一模一样,否则创建时会提示无法找到镜像</p>
+</blockquote>
+<h2 id="启动容器实例"><a href="#启动容器实例" class="headerlink" title="启动容器实例"></a>启动容器实例</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nova boot --image hipache --flavor 1 --nic net-id=342a0eef-e03d-4fd8-af3c-1ed485bee989 docker</span><br></pre></td></tr></table></figure>
+<p><img src="http://img.blog.csdn.net/20150915175424256" alt=""><br>1.此时启动容器实例报错失败,从nova-compute.log的日志看异常信息是”attach vif error”,具体是无法使用nova-rootwrap来提权进入namespace创建实例的网络接口</p>
+<blockquote>
+<p>google找到的这个BUG的解决是禁用compute节点的selinux</p>
+</blockquote>
+<p>2.继续下一个BUG,日志抛出一个Python异常是没有找到hardware.InstanceInfo模块</p>
+<blockquote>
+<p>进入目录/usr/lib/python2.7/site-packages/nova/virt<br>查看hardware.py的代码的确没有找到这个类或者函数,在github上找到nova项目的最新代码可以看到是有的.<br><img src="http://img.blog.csdn.net/20150915175450546" alt=""><br>把这个类的代码复制到本地的hardware.py里面</p>
+</blockquote>
+<p>3.重启启动一个实例后,异常继续保持<br><img src="http://img.blog.csdn.net/20150915175441385" alt=""></p>
+<blockquote>
+<p>异常提示InstanceInfo没有getitem这个内置方法<br>根据driver.py里面的调用可以发现get_info调用的时候是hardware.InstanceInfo是返回一个字典<br>删除刚才在hardware.py复制的代码,重写InstanceInfo<br><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">InstanceInfo</span><span class="params">(state=None, max_mem_kb=<span class="number">0</span>, mem_kb=<span class="number">0</span>, num_cpu=<span class="number">0</span>,cpu_time_ns=<span class="number">0</span>, id=None)</span>:</span></span><br><span class="line">        Info=&#123;&#125;</span><br><span class="line">        Info[<span class="string">'state'</span>] = state</span><br><span class="line">        Info[<span class="string">'max_mem_kb'</span>] = max_mem_kb</span><br><span class="line">        Info[<span class="string">'self.mem_kb'</span>] = mem_kb</span><br><span class="line">        Info[<span class="string">'num_cpu'</span>] = num_cpu</span><br><span class="line">        Info[<span class="string">'cpu_time_ns'</span>] = cpu_time_ns</span><br><span class="line">        Info[<span class="string">'id'</span>] = id</span><br><span class="line">        <span class="keyword">return</span> Info</span><br></pre></td></tr></table></figure></p>
+<p>此时启动实例正常无报错<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">[root@openstack-k ~]<span class="comment"># nova list</span></span><br><span class="line">+--------------------------------------+---------+--------+------------+-------------+-------------------------------------------+</span><br><span class="line">| ID                                   | Name    | Status | Task State | Power State | Networks                                  |</span><br><span class="line">+--------------------------------------+---------+--------+------------+-------------+-------------------------------------------+</span><br><span class="line">| c9d7ef23-f0fe-488d-88b1-3b5650901820 | hipache | ACTIVE | -          | Running     | admin_private=192.168.0.101, 172.24.4.228 |</span><br><span class="line">+--------------------------------------+---------+--------+------------+-------------+-------------------------------------------+</span><br><span class="line">[root@openstack-k ~]<span class="comment"># docker ps</span></span><br><span class="line">CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES</span><br><span class="line">14583d5d6308        hipache             <span class="string">"supervisord -n"</span>    5 hours ago         Up 5 hours                              nova-c9d7ef23-f0fe-488d-88b1-3b5650901820</span><br><span class="line">[root@openstack-k ~]<span class="comment">#</span></span><br></pre></td></tr></table></figure></p>
+</blockquote>
+<h2 id="后话"><a href="#后话" class="headerlink" title="后话"></a>后话</h2><blockquote>
+<p>本教程已不适用最新版本,仅供学习</p>
+</blockquote>
+<h2 id="参考连接"><a href="#参考连接" class="headerlink" title="参考连接:"></a>参考连接:</h2><blockquote>
+<p><a href="https://wiki.openstack.org/wiki/Docker" target="_blank" rel="noopener">https://wiki.openstack.org/wiki/Docker</a><br><a href="http://docs.docker.com/installation/centos/" target="_blank" rel="noopener">http://docs.docker.com/installation/centos/</a><br><a href="https://bugs.launchpad.net/nova-docker/+bug/1480246" target="_blank" rel="noopener">https://bugs.launchpad.net/nova-docker/+bug/1480246</a><br><a href="https://github.com/openstack/nova/" target="_blank" rel="noopener">https://github.com/openstack/nova/</a><br><a href="https://github.com/stackforge/nova-docker" target="_blank" rel="noopener">https://github.com/stackforge/nova-docker</a></p>
+</blockquote>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+            <tag> Docker </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[自定义制作Windows2008R2 nova镜像]]></title>
+      <url>/2015/07/23/%E8%87%AA%E5%AE%9A%E4%B9%89%E5%88%9B%E5%BB%BAOpenstack%E9%95%9C%E5%83%8F(Windows)/</url>
+      <content type="html"><![CDATA[<h2 id="安装准备"><a href="#安装准备" class="headerlink" title="安装准备"></a>安装准备</h2><ol>
+<li>KVM虚拟化配套工具集合(含图形界面更好)</li>
+<li>Windows2008R2安装光盘</li>
+<li>本文中出现的文件都放在mnt目录下</li>
+</ol>
+<h2 id="注意事项"><a href="#注意事项" class="headerlink" title="注意事项"></a>注意事项</h2><ol>
+<li><p>硬盘接口类型使用virtio, 网卡接口类型使用virtio.</p>
+</li>
+<li><p>添加第二个cdrom设备用来连接驱动文件,即虚拟机拥有磁盘、cdrom1、cdrom2.</p>
+</li>
+<li><p>制作驱动程序iso文件</p>
+</li>
+</ol>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost]<span class="comment"># wget https://fedorapeople.org/groups/virt/virtio-win/virtio-win.repo -O /etc/yum.repos.d/virtio-win.repo</span></span><br><span class="line">[root@localhost]<span class="comment"># yum install virtio-win</span></span><br><span class="line">[root@localhost]<span class="comment"># mkisofs -o /mnt/virtiowin.iso /usr/share/virtio-win/drivers</span></span><br></pre></td></tr></table></figure>
+<ol>
+<li>提取qemu-guest-agent</li>
+</ol>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost]<span class="comment"># cp /usr/share/virtio-win/guest-agent/qemu-ga-x64.msi /mnt/</span></span><br></pre></td></tr></table></figure>
+<ol>
+<li>下载cloud-init程序</li>
+</ol>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost]<span class="comment"># wget https://www.cloudbase.it/downloads/CloudbaseInitSetup_Beta_x64.msi /mnt/CloudbaseInitSetup_Beta_x64.msi</span></span><br></pre></td></tr></table></figure>
+<p>##制作KVM镜像</p>
+<p>创建一个20G大小镜像文件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[root@localhost mnt]<span class="comment"># qemu-img create -f qcow2 windows.img 20G</span></span><br></pre></td></tr></table></figure></p>
+<p>使用virt-manager安装虚拟机</p>
+<blockquote>
+<p>在选择磁盘时会提示无法找到磁盘,选择加载驱动后进入挂在的virtiowin.iso中寻找磁盘驱动进行加载后正常安装系统</p>
+</blockquote>
+<p>安装完成后进入系统安装其他驱动,打开设备管理器,文件仍然在virtiowin.iso里</p>
+<ol>
+<li>安装网卡驱动</li>
+<li>安装pci驱动</li>
+<li>安装ballon内存管理驱动</li>
+<li>打开远程桌面</li>
+<li>保持网卡dhcp</li>
+<li>关闭防火墙</li>
+</ol>
+<p>上传<code>qemu-ga-x64.msi</code> 和<code>CloudbaseInitSetup_Beta_x64.msi</code> 到windows中</p>
+<ol>
+<li><p>安装qemu-ga-x64.msi</p>
+</li>
+<li><p>安装CloudbaseInitSetup_Beta_x64.msi</p>
+<blockquote>
+<p>用户名 Administrator</p>
+<p>用户组 Administrators</p>
+<p>串口勾选com1</p>
+<p>勾选 sys prep(不要勾选关机)</p>
+</blockquote>
+</li>
+<li><p>修改cloudinit配置文件C:\Program Files\Cloudbase Solutions\Cloudbase-Init\conf\cloudbase-init.conf</p>
+<blockquote>
+<p>增加 first_logon_behaviour=no</p>
+<p>增加cloudbaseinit.plugins.common.setuserpassword.SetUserPasswordPlugin</p>
+</blockquote>
+<p>关机</p>
+</li>
+</ol>
+<h2 id="上传Windows镜像"><a href="#上传Windows镜像" class="headerlink" title="上传Windows镜像"></a>上传Windows镜像</h2><p>对虚拟磁盘进行压缩处理，qemu-img的qcow2具有高效压缩功能<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">qemu-img convert -c -O qcow2 /mnt/windows.img /mnt/windows.qcow2</span><br></pre></td></tr></table></figure></p>
+<blockquote>
+<p>等待压缩完毕，基本上容量可以压缩到一半</p>
+</blockquote>
+<p>把windows.qcow2 复制到openstack controler节点上,创建glance镜像<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">glance image-create --name “windows2k8” --disk-format qcow2 --container-format bare --is-public True --progress &lt; windows.qcow2</span><br></pre></td></tr></table></figure></p>
+<p>在KVM中运行windows镜像,实例操作系统时间默认是UTC时间,必须设置系统类型,让镜像使用localtime设置<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">imageID=`glance image-list | awk <span class="string">'/windows2k8/&#123;print $1&#125;'</span>`</span><br><span class="line">glance image-update <span class="variable">$imageID</span> --property os_type=<span class="string">'windows'</span></span><br></pre></td></tr></table></figure></p>
+<p>现在可以使用这个自定义的镜像来创建实例</p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[自定义制作centos6.6 nova镜像]]></title>
+      <url>/2015/07/23/%E8%87%AA%E5%AE%9A%E4%B9%89%E5%88%B6%E4%BD%9Ccentos6.6%E9%95%9C%E5%83%8F/</url>
+      <content type="html"><![CDATA[<h2 id="安装准备"><a href="#安装准备" class="headerlink" title="安装准备"></a>安装准备</h2><ol>
+<li>KVM虚拟化配套工具集合(含图形界面更好)</li>
+<li>centos安装光盘</li>
+</ol>
+<h2 id="注意事项"><a href="#注意事项" class="headerlink" title="注意事项"></a>注意事项</h2><ol>
+<li>硬盘手动分区,全部空间挂载 根分区, 不能使用lvm, swap</li>
+<li>硬盘接口类型使用virtio, 网卡接口类型使用virtio</li>
+</ol>
+<h2 id="镜像制作"><a href="#镜像制作" class="headerlink" title="镜像制作"></a>镜像制作</h2><p>添加epel源</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">yum install -y http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm</span><br><span class="line">yum clean all</span><br><span class="line">yum makecache</span><br></pre></td></tr></table></figure>
+<p>安装常用软件</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install vim wget curl git -y</span><br></pre></td></tr></table></figure>
+<p>安装电源管理</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">yum install acpid</span><br><span class="line">chkconfig acpid on</span><br></pre></td></tr></table></figure>
+<p>安装qemu agent</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">yum install qemu-guest-agent -y</span><br><span class="line">chkconfig qemu-ga on</span><br></pre></td></tr></table></figure>
+<p>禁用zeroconf路由</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> <span class="string">"NOZEROCONF=yes"</span> &gt;&gt; /etc/sysconfig/network</span><br></pre></td></tr></table></figure>
+<hr>
+<p>引导文件增加console参数</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vim /boot/grub/menu.lst</span><br></pre></td></tr></table></figure>
+<p>在kernel行<code>quit</code>后面增加</p>
+<p><code>console=ttyS0,115200n8</code> <code>no_timer_check</code></p>
+<hr>
+<p>安装cloudinit工具集</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install -y cloud-utils-growpart parted cloud-utils cloud-init</span><br></pre></td></tr></table></figure>
+<p>配置cloudinit 配置文件,允许root登陆,允许密码登陆</p>
+<blockquote>
+<p>vim /etc/cloud/cloud.cfg</p>
+</blockquote>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">users:</span><br><span class="line"> - default</span><br><span class="line"></span><br><span class="line">disable_root: 0</span><br><span class="line">ssh_pwauth:   1</span><br></pre></td></tr></table></figure>
+<p>清除网卡接口配置中与硬件的信息,同时改为dhcp模式</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">DEVICE=eth0</span><br><span class="line">TYPE=Ethernet</span><br><span class="line">ONBOOT=yes</span><br><span class="line">NM_CONTROLLED=no</span><br><span class="line">BOOTPROTO=dhcp</span><br></pre></td></tr></table></figure>
+<p>删除网卡MAC地址位置</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> -n &gt; /etc/udev/rules.d/70-persistent-net.rules</span><br></pre></td></tr></table></figure>
+<p>关闭镜像虚拟机</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">shutdown -h now</span><br></pre></td></tr></table></figure>
+<h2 id="KVM工具使用"><a href="#KVM工具使用" class="headerlink" title="KVM工具使用"></a>KVM工具使用</h2><p>清除镜像文件的硬件信息,<code>domainid</code>为镜像虚拟在kvm环境中的id,</p>
+<p>请根据实际情况填写, 查看使用<code>virsh list --all</code></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">virt-sysprep -d &lt;domainid&gt;</span><br></pre></td></tr></table></figure>
+<p>压缩镜像文件为qcow2格式, <code>centos.img</code>改为实际的磁盘文件</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">qemu-img convert -c -O qcow2 /mnt/centos.img /mnt/centos.qcow2</span><br></pre></td></tr></table></figure>
+<h2 id="Glance-上传镜像即可"><a href="#Glance-上传镜像即可" class="headerlink" title="Glance 上传镜像即可"></a>Glance 上传镜像即可</h2>]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Openstack I版部署安装(十)]]></title>
+      <url>/2015/04/07/openstack_i%E7%89%88%E6%9C%AC%E9%83%A8%E7%BD%B210/</url>
+      <content type="html"><![CDATA[<h2 id="配置Ceilometer-Server控制服务"><a href="#配置Ceilometer-Server控制服务" class="headerlink" title="配置Ceilometer Server控制服务"></a>配置Ceilometer Server控制服务</h2><p>Ceilometer项目创建时最初的目的是实现一个能为计费系统采集数据的框架。社区推动Ceilometer成为OpenStack里数据采集（监控数据、计费数据）的基础设施，采集到的数据提供给监控、计费、面板等项目使用</p>
+<h2 id="在controller控制节点上安装组件"><a href="#在controller控制节点上安装组件" class="headerlink" title="在controller控制节点上安装组件"></a>在controller控制节点上安装组件</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">yum install openstack-ceilometer-api openstack-ceilometer-collector \</span><br><span class="line">openstack-ceilometer-notification openstack-ceilometer-central \</span><br><span class="line">openstack-ceilometer-alarm python-ceilometerclient -y</span><br><span class="line">yum install mongodb-server mongodb -y</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">vi /etc/mongodb.conf</span><br><span class="line">bind_ip = 0.0.0.0</span><br></pre></td></tr></table></figure>
+<p>启动mongodb服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">service mongod start</span><br><span class="line">chkconfig mongod on</span><br><span class="line">mongo --host controller --<span class="built_in">eval</span> <span class="string">'</span></span><br><span class="line"><span class="string">db = db.getSiblingDB("ceilometer");</span></span><br><span class="line"><span class="string">db.addUser(&#123;user: "ceilometer",</span></span><br><span class="line"><span class="string">            pwd: "CEILOMETER_DBPASS",</span></span><br><span class="line"><span class="string">            roles: [ "readWrite", "dbAdmin" ]&#125;)'</span></span><br><span class="line">openssl rand -hex 10</span><br><span class="line">3e8bda4e13a68e966142               <span class="comment">#记下此ID,下面配置文件需要用到</span></span><br></pre></td></tr></table></figure></p>
+<p>创建角色<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">keystone user-create --name=ceilometer --pass=CEILOMETER_PASS --email=ceilometer@example.com</span><br><span class="line">keystone user-role-add --user=ceilometer --tenant=service --role=admin</span><br></pre></td></tr></table></figure></p>
+<p>编辑配置文件<br>vi /etc/ceilometer/ceilometer.conf</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">rpc_backend = ceilometer.openstack.common.rpc.impl_qpid</span><br><span class="line">auth_strategy = keystone</span><br><span class="line">[alarm]</span><br><span class="line">[api]</span><br><span class="line">[collector]</span><br><span class="line">[database]</span><br><span class="line">connection = mongodb://ceilometer:CEILOMETER_DBPASS@controller:27017/ceilometer</span><br><span class="line">[dispatcher_file]</span><br><span class="line">[event]</span><br><span class="line">[keystone_authtoken]</span><br><span class="line">admin_user = ceilometer</span><br><span class="line">admin_tenant_name = service</span><br><span class="line">auth_protocol = http</span><br><span class="line">auth_uri = http://controller:5000</span><br><span class="line">admin_password = CEILOMETER_PASS</span><br><span class="line">auth_host = controller</span><br><span class="line">[matchmaker_redis]</span><br><span class="line">[matchmaker_ring]</span><br><span class="line">[notification]</span><br><span class="line">[publisher]</span><br><span class="line">metering_secret = 3e8bda4e13a68e966142</span><br><span class="line">[publisher_rpc]</span><br><span class="line">[rpc_notifier2]</span><br><span class="line">[service_credentials]</span><br><span class="line">os_auth_url = http://controller:5000/v2.0</span><br><span class="line">os_username = ceilometer</span><br><span class="line">os_tenant_name = service</span><br><span class="line">os_password = CEILOMETER_PASS</span><br><span class="line">[ssl]</span><br><span class="line">[vmware]</span><br></pre></td></tr></table></figure>
+<p>创建服务端点<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">keystone service-create --name=ceilometer --<span class="built_in">type</span>=metering --description=<span class="string">"Telemetry"</span></span><br><span class="line">keystone endpoint-create \</span><br><span class="line">  --service-id=$(keystone service-list | awk <span class="string">'/ metering / &#123;print $2&#125;'</span>) \</span><br><span class="line">  --publicurl=http://controller:8777 \</span><br><span class="line">  --internalurl=http://controller:8777 \</span><br><span class="line">  --adminurl=http://controller:8777</span><br></pre></td></tr></table></figure></p>
+<p>启动服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">service openstack-ceilometer-api start</span><br><span class="line">service openstack-ceilometer-notification start</span><br><span class="line">service openstack-ceilometer-central start</span><br><span class="line">service openstack-ceilometer-collector start</span><br><span class="line">service openstack-ceilometer-alarm-evaluator start</span><br><span class="line">service openstack-ceilometer-alarm-notifier start</span><br><span class="line">chkconfig openstack-ceilometer-api on</span><br><span class="line">chkconfig openstack-ceilometer-notification on</span><br><span class="line">chkconfig openstack-ceilometer-central on</span><br><span class="line">chkconfig openstack-ceilometer-collector on</span><br><span class="line">chkconfig openstack-ceilometer-alarm-evaluator on</span><br><span class="line">chkconfig openstack-ceilometer-alarm-notifier on</span><br></pre></td></tr></table></figure></p>
+<h2 id="配置Image-Agent计算节点代理"><a href="#配置Image-Agent计算节点代理" class="headerlink" title="配置Image Agent计算节点代理"></a>配置Image Agent计算节点代理</h2><p>在controller控制节点上<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">openstack-config --<span class="built_in">set</span> /etc/glance/glance-api.conf DEFAULT notification_driver messaging</span><br><span class="line">openstack-config --<span class="built_in">set</span> /etc/glance/glance-api.conf DEFAULT rpc_backend qpid</span><br><span class="line">service openstack-glance-api restart</span><br><span class="line">service openstack-glance-registry restart</span><br></pre></td></tr></table></figure></p>
+<h2 id="配置Volumes-Agent计算节点代理"><a href="#配置Volumes-Agent计算节点代理" class="headerlink" title="配置Volumes Agent计算节点代理"></a>配置Volumes Agent计算节点代理</h2><p>在controller控制节点上<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">openstack-config --<span class="built_in">set</span> /etc/cinder/cinder.conf DEFAULT control_exchange cinder</span><br><span class="line">openstack-config --<span class="built_in">set</span> /etc/cinder/cinder.conf \</span><br><span class="line">DEFAULT notification_driver cinder.openstack.common.notifier.rpc_notifier</span><br><span class="line">service openstack-cinder-api restart</span><br><span class="line">service openstack-cinder-scheduler restart</span><br><span class="line">service openstack-cinder-volume restart</span><br></pre></td></tr></table></figure></p>
+<h2 id="配置Compute-Agent计算节点代理"><a href="#配置Compute-Agent计算节点代理" class="headerlink" title="配置Compute Agent计算节点代理"></a>配置Compute Agent计算节点代理</h2><p>在compute计算节点上<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install openstack-ceilometer-compute python-ceilometerclient python-pecan -y</span><br></pre></td></tr></table></figure></p>
+<blockquote>
+<p>vi /etc/nova/nova.conf  #添加一下配置,确保属于[DEFAULT]下<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">instance_usage_audit = True</span><br><span class="line">instance_usage_audit_period = hour</span><br><span class="line">notify_on_state_change = vm_and_task_state</span><br><span class="line">notification_driver = nova.openstack.common.notifier.rpc_notifier</span><br><span class="line">notification_driver = ceilometer.compute.nova_notifier</span><br></pre></td></tr></table></figure></p>
+</blockquote>
+<p>启动服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">service openstack-nova-compute restart</span><br></pre></td></tr></table></figure></p>
+<p>编辑配置文件<br>vi /etc/ceilometer/ceilometer.conf</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">qpid_hostname = controller</span><br><span class="line">[alarm]</span><br><span class="line">[api]</span><br><span class="line">[collector]</span><br><span class="line">[database]</span><br><span class="line">[dispatcher_file]</span><br><span class="line">[event]</span><br><span class="line">[keystone_authtoken]</span><br><span class="line">auth_host = controller</span><br><span class="line">admin_user = ceilometer</span><br><span class="line">admin_tenant_name = service</span><br><span class="line">auth_protocol = http</span><br><span class="line">admin_password = CEILOMETER_PASS</span><br><span class="line">[matchmaker_redis]</span><br><span class="line">[matchmaker_ring]</span><br><span class="line">[notification]</span><br><span class="line">[publisher]</span><br><span class="line">metering_secret = 3e8bda4e13a68e966142</span><br><span class="line">[publisher_rpc]</span><br><span class="line">[rpc_notifier2]</span><br><span class="line">[service_credentials]</span><br><span class="line">os_username = ceilometer</span><br><span class="line">os_tenant_name = service</span><br><span class="line">os_password = CEILOMETER_PASS</span><br><span class="line">os_auth_url = http://controller:5000/v2.0</span><br><span class="line">[ssl]</span><br><span class="line">[vmware]</span><br></pre></td></tr></table></figure>
+<p>启动服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">service openstack-ceilometer-compute start</span><br><span class="line">chkconfig openstack-ceilometer-compute on</span><br></pre></td></tr></table></figure></p>
+<h2 id="创建Alarm告警阀值"><a href="#创建Alarm告警阀值" class="headerlink" title="创建Alarm告警阀值"></a>创建Alarm告警阀值</h2><p>为指定的实例创建告警阀值为: 连续三次CPU使用率超过70%的时间持续10分钟<br>这里只有一个例子,可以根本业务需求来定制各种的Alarm</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">nova list | awk <span class="string">'/cirros-vol/&#123;print $2&#125;'</span></span><br><span class="line">63e95b60-d4ab-4b52-8529-82b345083090</span><br><span class="line">ceilometer alarm-threshold-create --name cpu_hi \</span><br><span class="line">  --description <span class="string">'instance running hot'</span> \</span><br><span class="line">  --meter-name cpu_util --threshold 70.0 \</span><br><span class="line">  --comparison-operator gt --statistic avg \</span><br><span class="line">  --period 600 --evaluation-periods 3 \</span><br><span class="line">  --alarm-action <span class="string">'log://'</span> \</span><br><span class="line">  --query resource_id=63e95b60-d4ab-4b52-8529-82b345083090</span><br><span class="line">ceilometer alarm-list</span><br></pre></td></tr></table></figure>
+<h2 id="数据收集验证"><a href="#数据收集验证" class="headerlink" title="数据收集验证"></a>数据收集验证</h2><p>重新Launch虚拟机,查看最新的Mem使用数据</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ceilometer statistics -m memory -p 60</span><br></pre></td></tr></table></figure>
+<p><img src="http://img.blog.csdn.net/20150417110755736" alt=""></p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Openstack I版部署安装(九)]]></title>
+      <url>/2015/04/06/openstack_i%E7%89%88%E6%9C%AC%E9%83%A8%E7%BD%B29/</url>
+      <content type="html"><![CDATA[<h2 id="虚拟机热迁移配置"><a href="#虚拟机热迁移配置" class="headerlink" title="虚拟机热迁移配置"></a>虚拟机热迁移配置</h2><p>笔者的环境已经部署双计算及节点,并且同时使用ceph rbd作为后端存储.<br>双计算节点可以实现虚拟机的热迁移,注意迁移的主机资源必须足够.同时需要设置节点知之间libvirtd服务无密码互相访问<br>在两个计算节点上执行<br>vi /etc/libvirt/libvirtd.conf 添加以下配置<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">listen_tls = 0</span><br><span class="line">listen_tcp = 1</span><br><span class="line">tcp_port = <span class="string">"16509"</span></span><br><span class="line">listen_addr = <span class="string">"0.0.0.0"</span></span><br><span class="line">auth_tcp = <span class="string">"none"</span></span><br></pre></td></tr></table></figure></p>
+<p>重启libvirtd,打开端口监听</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">service libvirtd stop</span><br><span class="line">libvirtd -d -l     </span><br><span class="line">[root@compute01 ~]<span class="comment"># netstat -anp | grep 16509</span></span><br><span class="line">tcp            0         0  0.0.0.0:16509     0.0.0.0:*        LISTEN        10042/libvirtd</span><br><span class="line">``` </span><br><span class="line"><span class="comment">## 迁移测试</span></span><br><span class="line">在controller节点上执行,查看目前实例运行在compute01节点上</span><br><span class="line">```bash</span><br><span class="line">nova show cirros-vol | grep <span class="string">"hypervisor_hostname"</span></span><br></pre></td></tr></table></figure>
+<p>执行在线热迁移</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nova live-migration cirros-vol compute02</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>再一次执行nova show cirros-vol   可以看到已经迁移到compute02上</p>
+</blockquote>
+<h2 id="部署配置Heat业务流"><a href="#部署配置Heat业务流" class="headerlink" title="部署配置Heat业务流"></a>部署配置Heat业务流</h2><blockquote>
+<p>Heat作为自动化的业务流系统,可以帮助用户以模板的形式去定义虚拟机的配置和应用,根据模板&gt;文件可以指定某配置虚拟机的数量,可以配置某虚拟机上部署的应用系统比如MySQL,Apache等</p>
+</blockquote>
+<p>在controller节点上执行</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">yum install openstack-heat-api openstack-heat-engine openstack-heat-api-cfn -y</span><br><span class="line">mysql -u root -p</span><br><span class="line">mysql&gt; CREATE DATABASE heat;</span><br><span class="line">mysql&gt; GRANT ALL PRIVILEGES ON heat.* TO <span class="string">'heat'</span>@<span class="string">'localhost'</span> IDENTIFIED BY <span class="string">'HEAT_DBPASS'</span>;</span><br><span class="line">mysql&gt; GRANT ALL PRIVILEGES ON heat.* TO <span class="string">'heat'</span>@<span class="string">'%'</span> IDENTIFIED BY <span class="string">'HEAT_DBPASS'</span>;</span><br></pre></td></tr></table></figure>
+<p>创建HEAT角色<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">keystone user-create --name=heat --pass=HEAT_PASS --email=heat@example.com</span><br><span class="line">keystone user-role-add --user=heat --tenant=service --role=admin</span><br><span class="line">keystone user-list | awk <span class="string">'/heat/&#123;print $2&#125;'</span></span><br><span class="line">832c4ffb26fd46c7b5a3d753ba1f5429</span><br></pre></td></tr></table></figure></p>
+<p>编辑配置文件 vi /etc/heat/heat.conf</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">heat_metadata_server_url = http://10.0.0.11:8000</span><br><span class="line">heat_waitcondition_server_url = http://10.0.0.11:8000/v1/waitcondition</span><br><span class="line">stack_user_domain = 832c4ffb26fd46c7b5a3d753ba1f5429 </span><br><span class="line">stack_domain_admin = admin</span><br><span class="line">stack_domain_admin_password = ADMIN_PASS</span><br><span class="line">[auth_password]</span><br><span class="line">[clients]</span><br><span class="line">[clients_ceilometer]</span><br><span class="line">[clients_cinder]</span><br><span class="line">[clients_heat]</span><br><span class="line">[clients_keystone]</span><br><span class="line">[clients_neutron]</span><br><span class="line">[clients_nova]</span><br><span class="line">[clients_swift]</span><br><span class="line">[clients_trove]</span><br><span class="line">[database]</span><br><span class="line">connection = mysql://heat:HEAT_DBPASS@controller/heat</span><br><span class="line">[ec2authtoken]</span><br><span class="line">auth_uri = http://controller:5000/v2.0</span><br><span class="line">[heat_api]</span><br><span class="line">[heat_api_cfn]</span><br><span class="line">[heat_api_cloudwatch]</span><br><span class="line">[keystone_authtoken]</span><br><span class="line">auth_host = controller</span><br><span class="line">auth_port = 35357</span><br><span class="line">auth_protocol = http</span><br><span class="line">auth_uri = http://controller:5000/v2.0</span><br><span class="line">admin_tenant_name = service</span><br><span class="line">admin_user = heat</span><br><span class="line">admin_password = HEAT_PASS</span><br><span class="line">[matchmaker_redis]</span><br><span class="line">[matchmaker_ring]</span><br><span class="line">[paste_deploy]</span><br><span class="line">[revision]</span><br><span class="line">heat_revision=2014.1.3-1.el6</span><br><span class="line">[rpc_notifier2]</span><br><span class="line">[ssl]</span><br></pre></td></tr></table></figure>
+<p>同步导入数据库表</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">su -s /bin/sh -c <span class="string">"heat-manage db_sync"</span> heat</span><br></pre></td></tr></table></figure>
+<p>创建Heat服务端点</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">keystone service-create --name=heat --<span class="built_in">type</span>=orchestration --description=<span class="string">"Orchestration"</span></span><br><span class="line">keystone endpoint-create --service-id=$(keystone service-list | awk <span class="string">'/ orchestration / &#123;print$2&#125;'</span>) \</span><br><span class="line">  --publicurl=http://controller:8004/v1/%\(tenant_id\)s \</span><br><span class="line">  --internalurl=http://controller:8004/v1/%\(tenant_id\)s \</span><br><span class="line">  --adminurl=http://controller:8004/v1/%\(tenant_id\)s</span><br><span class="line">keystone service-create --name=heat-cfn --<span class="built_in">type</span>=cloudformation --description=<span class="string">"Orchestration Formation"</span></span><br><span class="line">keystone endpoint-create \</span><br><span class="line">--service-id=$(keystone service-list | awk <span class="string">'/ cloudformation / &#123;print$2&#125;'</span>) \</span><br><span class="line">  --publicurl=http://controller:8000/v1 \</span><br><span class="line">  --internalurl=http://controller:8000/v1 \</span><br><span class="line">  --adminurl=http://controller:8000/v1</span><br></pre></td></tr></table></figure>
+<p>启动Heat服务</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">keystone role-create --name heat_stack_user</span><br><span class="line">service openstack-heat-api start</span><br><span class="line">service openstack-heat-api-cfn start</span><br><span class="line">service openstack-heat-engine start</span><br><span class="line">chkconfig openstack-heat-api on</span><br><span class="line">chkconfig openstack-heat-api-cfn on</span><br><span class="line">chkconfig openstack-heat-engine on</span><br></pre></td></tr></table></figure>
+<h2 id="创建业务流模板"><a href="#创建业务流模板" class="headerlink" title="创建业务流模板"></a>创建业务流模板</h2><p>vi test-stack.yml<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">heat_template_version: 2013-05-23</span><br><span class="line">description: Test Template</span><br><span class="line">parameters:</span><br><span class="line">    ImageID:</span><br><span class="line">        <span class="built_in">type</span>: string</span><br><span class="line">        description: Image use to boot a server</span><br><span class="line">    NetID:</span><br><span class="line">        <span class="built_in">type</span>: string</span><br><span class="line">        description: Network ID <span class="keyword">for</span> the server</span><br><span class="line">resources:</span><br><span class="line">    server1:</span><br><span class="line">        <span class="built_in">type</span>: OS::Nova::Server</span><br><span class="line">        properties:</span><br><span class="line">            name: <span class="string">"Test server"</span></span><br><span class="line">            image: &#123; get_param : ImageID &#125;</span><br><span class="line">            flavor: <span class="string">"m1.tiny"</span></span><br><span class="line">            networks:</span><br><span class="line">            - network: &#123; get_param : NetID &#125;</span><br><span class="line">outputs:</span><br><span class="line">    server1_private_ip:</span><br><span class="line">        description: IP address of the server <span class="keyword">in</span> the private network</span><br><span class="line">        value: &#123; get_attr: [ server1, first_address ] &#125;</span><br></pre></td></tr></table></figure></p>
+<p>通过模板创建虚拟机实例<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">image=$(glance image-list | awk <span class="string">'/cirros/&#123;print $2&#125;'</span>)</span><br><span class="line">net=$(neutron net-list | awk <span class="string">'/demo-net/&#123;print $2&#125;'</span>)</span><br><span class="line">heat stack-create -f <span class="built_in">test</span>-stack.yml -P <span class="string">"ImageID=<span class="variable">$image</span>;NetID=<span class="variable">$net</span>"</span> teststack</span><br><span class="line">heat stack-list</span><br><span class="line">nova list              <span class="comment">#查看到栈的情况,和通过模板创建的虚拟机情况</span></span><br></pre></td></tr></table></figure></p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Openstack I版部署安装(八)]]></title>
+      <url>/2015/04/05/openstack_i%E7%89%88%E6%9C%AC%E9%83%A8%E7%BD%B28/</url>
+      <content type="html"><![CDATA[<h2 id="调试验证"><a href="#调试验证" class="headerlink" title="调试验证"></a>调试验证</h2><p>在controller节点上查看服务的状态,笑脸为正常</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nova-manage service list</span><br></pre></td></tr></table></figure>
+<p><img src="http://img.blog.csdn.net/20150417102335768" alt=""><br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">neutron agent-list</span><br></pre></td></tr></table></figure></p>
+<p><img src="http://img.blog.csdn.net/20150417102225316" alt=""></p>
+<h2 id="Neutron创建网络"><a href="#Neutron创建网络" class="headerlink" title="Neutron创建网络"></a>Neutron创建网络</h2><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">neutron net-create ext-net --shared --router:external=True</span><br><span class="line">neutron subnet-create ext-net --name ext-subnet \</span><br><span class="line">--allocation-pool start=192.168.100.101,end=192.168.100.200 \</span><br><span class="line">--<span class="built_in">disable</span>-dhcp --gateway 192.168.100.1 192.168.100.0/24</span><br><span class="line">neutron net-create demo-net</span><br><span class="line">neutron subnet-create demo-net --name demo-subnet --gateway 172.32.16.1 172.32.16.0/24</span><br><span class="line">neutron router-create demo-router</span><br><span class="line">neutron router-interface-add demo-router demo-subnet</span><br><span class="line">neutron router-gateway-set demo-router ext-net</span><br><span class="line">nova secgroup-add-rule default icmp -1 -1 0.0.0.0/0</span><br><span class="line">nova secgroup-add-rule default tcp 22 22 0.0.0.0/0</span><br></pre></td></tr></table></figure>
+<p>查看demo-net的网络ID,笔者环境下是 91c8de0a-4592-4fe7-a0a0-5ba050d1da96<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">neutron net-list</span><br><span class="line">+------------------------------------+-----------+----------------------------------------------------+</span><br><span class="line">|               ID                   |  Name     |                     subnets                        |</span><br><span class="line">+------------------------------------+-----------+----------------------------------------------------+</span><br><span class="line">|91c8de0a-4592-4fe7-a0a0-5ba050d1da96| demoe-net |73b6299c-1355-4976-8a8b-6ff9de4a9431 172.32.16.0/24 |</span><br><span class="line">|a73h56g1-f2d2-a6c8-a5c6b2b1d7768c108| ext-net   |56cb12ad-2541-5716-9a6b-6c6a1b2c8a26 192.168.1.0/24 |</span><br><span class="line">+------------------------------------+-----------+----------------------------------------------------+</span><br></pre></td></tr></table></figure></p>
+<h2 id="Nova创建虚拟机"><a href="#Nova创建虚拟机" class="headerlink" title="Nova创建虚拟机"></a>Nova创建虚拟机</h2><p>创建密钥</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ssh-keygen</span><br><span class="line">nova keypair-add --pub-key ~/.ssh/id_rsa.pub demo-key</span><br></pre></td></tr></table></figure>
+<p>启动虚拟机实例</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">nova boot --flavor m1.tiny --image cirros-0.3.2-x86_64 \</span><br><span class="line">--nic net-id=91c8de0a-4592-4fe7-a0a0-5ba050d1da96 \</span><br><span class="line">--security-group default --key-name demo-key cirros-vol</span><br><span class="line">neutron floatingip-asscoiate a73h56g1-f2d2-a6c8-a5c6b2b1d7768c108 91c8de0a-4592-4fe7-a0a0-5ba050d1da96</span><br></pre></td></tr></table></figure>
+<p>nova list 查看虚拟机启动状态,正常是ACTIVE  -  Running<br>获取虚拟机的novnc访问链接,可以通过浏览器访问</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">nova get-vnc-console cirros-vol novnc</span><br></pre></td></tr></table></figure>
+<p>在浏览器中可以看到cirros已经在运行<br>用户名cirros 密码 cubswin:)<br><img src="http://img.blog.csdn.net/20150417101151973" alt=""></p>
+<p>查看实例的subnet IP地址,正确获取<br><img src="http://img.blog.csdn.net/20150417101050319" alt=""></p>
+<p>由于实验环境中的拓扑结构,192.168.100.0属于外网网段我们用处于此网段客户端来验证,在部署的环境中,内外网的相对的,并不是真实的公网<br><img src="http://img.blog.csdn.net/20150417101158507" alt=""></p>
+<blockquote>
+<p>可以ping通,外网访问正常.这里要属于的是外网这个概念是相对.<br>我的192.168.100.0网段是无法上网的,但是在架构上来说是一个外网的网段</p>
+</blockquote>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Openstack I版部署安装(七)]]></title>
+      <url>/2015/04/04/openstack_i%E7%89%88%E6%9C%AC%E9%83%A8%E7%BD%B27/</url>
+      <content type="html"><![CDATA[<h2 id="部署配置Neutron网络组件"><a href="#部署配置Neutron网络组件" class="headerlink" title="部署配置Neutron网络组件"></a>部署配置Neutron网络组件</h2><h3 id="配置Neutron网络-计算节点"><a href="#配置Neutron网络-计算节点" class="headerlink" title="配置Neutron网络(计算节点)"></a>配置Neutron网络(计算节点)</h3><p>在compute节点上执行<br>开启内核转发<br>vi /etc/sysctl.conf<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">net.ipv4.conf.all.rp_filter=0</span><br><span class="line">net.ipv4.conf.default.rp_filter=0</span><br></pre></td></tr></table></figure></p>
+<p>执行配置</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sysctl -p</span><br></pre></td></tr></table></figure>
+<p>安装必须组件</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install openstack-neutron-ml2 openstack-neutron-openvswitch -y</span><br></pre></td></tr></table></figure>
+<p>备份默认neutron配置文件</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mv /etc/neutron/neutron.conf /etc/neutron/neutron.conf.bak</span><br></pre></td></tr></table></figure>
+<p>创建neutron配置文件<br>vi /etc/neutron/neutron.conf</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">auth_strategy = keystone</span><br><span class="line">rpc_backend = neutron.openstack.common.rpc.impl_qpid</span><br><span class="line">qpid_hostname = controller</span><br><span class="line">core_plugin = ml2</span><br><span class="line">service_plugins = router</span><br><span class="line">verbose = True</span><br><span class="line">[quotas]</span><br><span class="line">[agent]</span><br><span class="line">[keystone_authtoken]</span><br><span class="line">auth_uri = http://controller:5000</span><br><span class="line">auth_host = controller</span><br><span class="line">auth_protocol = http</span><br><span class="line">auth_port = 35357</span><br><span class="line">admin_tenant_name = service</span><br><span class="line">admin_user = neutron</span><br><span class="line">admin_password = NEUTRON_PASS</span><br><span class="line">[database]</span><br><span class="line">service_provider=VPN:openswan:neutron.services.vpn.service_drivers.ipsec.IPsecVPNDriver:default</span><br></pre></td></tr></table></figure>
+<p>备份ml2插件配置</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mv /etc/neutron/plugins/ml2/ml2_conf.ini /etc/neutron/plugins/ml2/ml2_conf.ini.bak</span><br></pre></td></tr></table></figure>
+<p>创建ml2插件配置<br>vi /etc/neutron/plugins/ml2/ml2_conf.ini</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">[ml2]</span><br><span class="line">type_drivers = gre</span><br><span class="line">tenant_network_types = gre</span><br><span class="line">mechanism_drivers = openvswitch</span><br><span class="line">[ml2_type_flat]</span><br><span class="line">[ml2_type_vlan]</span><br><span class="line">[ml2_type_gre]</span><br><span class="line">tunnel_id_ranges = 1:1000</span><br><span class="line">[ml2_type_vxlan]</span><br><span class="line">[securitygroup]</span><br><span class="line">firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver</span><br><span class="line">enable_security_group = True</span><br><span class="line">[ovs]</span><br><span class="line">local_ip = 10.0.1.31</span><br><span class="line">tunnel_type = gre</span><br><span class="line">enable_tunneling = True</span><br></pre></td></tr></table></figure>
+<p>修改配置文件权限</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">chown -R root:neutron /etc/neutron/neutron.conf</span><br><span class="line">chown -R root:neutron /etc/neutron/plugins/ml2/ml2_conf.ini</span><br></pre></td></tr></table></figure>
+<p>启动服务</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">service openvswitch start</span><br><span class="line">chkconfig openvswitch on</span><br></pre></td></tr></table></figure>
+<p>删除KVM默认网桥</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">virsh net-destroy default</span><br><span class="line">virsh net-undefine default</span><br></pre></td></tr></table></figure>
+<p>添加br-int网桥</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-br br-int</span><br></pre></td></tr></table></figure>
+<p>创建ml2配置文件软连接</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ln -s plugins/ml2/ml2_conf.ini /etc/neutron/plugin.ini</span><br><span class="line">cp /etc/init.d/neutron-openvswitch-agent /etc/init.d/neutron-openvswitch-agent.orig</span><br><span class="line">sed -i <span class="string">'s,plugins/openvswitch/ovs_neutron_plugin.ini,plugin.ini,g'</span> /etc/init.d/neutron-openvswitch-agent</span><br></pre></td></tr></table></figure>
+<p>启动服务</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">service openstack-nova-compute restart</span><br><span class="line">service neutron-openvswitch-agent start</span><br><span class="line">chkconfig neutron-openvswitch-agent on</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>同样的步骤添加compute02节点,同时要注意机器名和IP地址必须要修改为对应的</p>
+</blockquote>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Openstack I版部署安装(六)]]></title>
+      <url>/2015/04/03/openstack_i%E7%89%88%E6%9C%AC%E9%83%A8%E7%BD%B26/</url>
+      <content type="html"><![CDATA[<h2 id="部署配置Neutron网络组件"><a href="#部署配置Neutron网络组件" class="headerlink" title="部署配置Neutron网络组件"></a>部署配置Neutron网络组件</h2><h3 id="配置Neutron控制节点"><a href="#配置Neutron控制节点" class="headerlink" title="配置Neutron控制节点"></a>配置Neutron控制节点</h3><p>在controller上<br>创建neutron用户、角色、端点服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">keystone user-create --name neutron --pass NEUTRON_PASS --email neutron@example.com</span><br><span class="line">keystone user-role-add --user neutron --tenant service --role admin</span><br><span class="line">keystone service-create --name neutron --<span class="built_in">type</span> network --description <span class="string">"OpenStack Networking"</span></span><br><span class="line">keystone endpoint-create \</span><br><span class="line">--service-id $(keystone service-list | awk <span class="string">'/ network / &#123;print $2&#125;'</span>) \</span><br><span class="line">--publicurl http://controller:9696 \</span><br><span class="line">--adminurl http://controller:9696 \</span><br><span class="line">--internalurl http://controller:9696</span><br></pre></td></tr></table></figure></p>
+<p>安装neutron-server组件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install openstack-neutron openstack-neutron-ml2 python-neutronclient -y</span><br></pre></td></tr></table></figure></p>
+<p>备份配置文件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mv /etc/neutron/neutron.conf /etc/neutron/neutron.conf.bak</span><br></pre></td></tr></table></figure></p>
+<p>创建neutron配置文件<br>vi /etc/neutron/neutron.conf<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">auth_strategy = keystone</span><br><span class="line">rpc_backend = neutron.openstack.common.rpc.impl_qpid</span><br><span class="line">qpid_hostname = controller</span><br><span class="line">notify_nova_on_port_status_changes = True</span><br><span class="line">notify_nova_on_port_data_changes = True</span><br><span class="line">nova_url = http://controller:8774/v2</span><br><span class="line">nova_admin_username = nova</span><br><span class="line">nova_admin_password = NOVA_PASS</span><br><span class="line">nova_admin_auth_url = http://controller:35357/v2.0</span><br><span class="line">core_plugin = ml2</span><br><span class="line">service_plugins = router</span><br><span class="line">verbose = True</span><br><span class="line">[quotas]</span><br><span class="line">[agent]</span><br><span class="line">[keystone_authtoken]</span><br><span class="line">auth_uri = http://controller:5000</span><br><span class="line">auth_host = controller</span><br><span class="line">auth_protocol = http</span><br><span class="line">auth_port = 35357</span><br><span class="line">admin_tenant_name = service</span><br><span class="line">admin_user = neutron</span><br><span class="line">admin_password = NEUTRON_PASS</span><br><span class="line">[database]</span><br><span class="line">connection = mysql://neutron:NEUTRON_DBPASS@controller/neutron</span><br><span class="line">service_provider=VPN:openswan:neutron.services.vpn.service_drivers.ipsec.IPsecVPNDriver:default</span><br></pre></td></tr></table></figure></p>
+<p>修改配置文件权限<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">chown -R root:neutron /etc/neutron/neutron.conf</span><br></pre></td></tr></table></figure></p>
+<p>配置文件写入服务身份 的租户ID<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">uuid=`keystone tenant-list | awk <span class="string">'/ service / &#123; print $2 &#125;'</span>`</span><br><span class="line">sed -i <span class="string">'/1/a\'</span><span class="string">"<span class="variable">$uuid</span>"</span><span class="string">''</span> /etc/neutron/neutron.conf</span><br></pre></td></tr></table></figure></p>
+<p>备份ml2配置文件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mv /etc/neutron/plugins/ml2/ml2_conf.ini /etc/neutron/plugins/ml2/ml2_conf.ini.bak</span><br></pre></td></tr></table></figure></p>
+<p>创建ml2配置文件<br>vi /etc/neutron/plugins/ml2/ml2_conf.ini<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">[ml2]</span><br><span class="line">type_drivers = gre</span><br><span class="line">tenant_network_types = gre</span><br><span class="line">mechanism_drivers = openvswitch</span><br><span class="line">[ml2_type_flat]</span><br><span class="line">[ml2_type_vlan]</span><br><span class="line">[ml2_type_gre]</span><br><span class="line">tunnel_id_ranges = 1:1000</span><br><span class="line">[ml2_type_vxlan]</span><br><span class="line">[securitygroup]</span><br><span class="line">firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver</span><br><span class="line">enable_security_group = True</span><br></pre></td></tr></table></figure></p>
+<p>修改ml2配置权限<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">chown -R root:neutron /etc/neutron/plugins/ml2/ml2_conf.ini</span><br></pre></td></tr></table></figure></p>
+<p>创建软连接指向ml2配置<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ln -s /etc/neutron/plugins/ml2/ml2_conf.ini /etc/neutron/plugin.ini</span><br></pre></td></tr></table></figure></p>
+<p>启动neutron-server服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">service openstack-nova-api restart</span><br><span class="line">service openstack-nova-scheduler restart</span><br><span class="line">service openstack-nova-conductor restart</span><br><span class="line">service neutron-server start</span><br><span class="line">chkconfig neutron-server on</span><br></pre></td></tr></table></figure></p>
+<h3 id="配置Neutron网络组件"><a href="#配置Neutron网络组件" class="headerlink" title="配置Neutron网络组件"></a>配置Neutron网络组件</h3><p>在neutron主机上<br>配置第三块网卡<br>vi /etc/sysconfig/network-scripts/ifcfg-eth2<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">DEVICE=eth2</span><br><span class="line">TYPE=Ethernet</span><br><span class="line">ONBOOT=yes</span><br><span class="line">BOOTPROTO=none</span><br></pre></td></tr></table></figure></p>
+<p>开启内核转发,以便多网卡之间的数据包转发<br>vi /etc/sysctl.conf<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">net.ipv4.ip_forward=1</span><br><span class="line">net.ipv4.conf.all.rp_filter=0</span><br><span class="line">net.ipv4.conf.default.rp_filter=0</span><br></pre></td></tr></table></figure></p>
+<p>应用修改生效<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sysctl -p</span><br></pre></td></tr></table></figure></p>
+<p>安装neutron必要组件,包括ovs<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install openstack-neutron openstack-neutron-ml2 openstack-neutron-openvswitch MySQL-python -y</span><br></pre></td></tr></table></figure></p>
+<p>备份neutron配置文件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mv /etc/neutron/neutron.conf /etc/neutron/neutron.conf.bak</span><br></pre></td></tr></table></figure></p>
+<p>创建neutron配置文件<br>vi /etc/neutron/neutron.conf<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">auth_strategy = keystone</span><br><span class="line">rpc_backend = neutron.openstack.common.rpc.impl_qpid</span><br><span class="line">qpid_hostname = controller</span><br><span class="line">core_plugin = ml2</span><br><span class="line">service_plugins = router</span><br><span class="line">verbose = True</span><br><span class="line">[quotas]</span><br><span class="line">[agent]</span><br><span class="line">[keystone_authtoken]</span><br><span class="line">auth_uri = http://controller:5000</span><br><span class="line">auth_host = controller</span><br><span class="line">auth_protocol = http</span><br><span class="line">auth_port = 35357</span><br><span class="line">admin_tenant_name = service</span><br><span class="line">admin_user = neutron</span><br><span class="line">admin_password = NEUTRON_PASS</span><br><span class="line">[database]</span><br><span class="line">service_provider=VPN:openswan:neutron.services.vpn.service_drivers.ipsec.IPsecVPNDriver:default</span><br></pre></td></tr></table></figure></p>
+<p>修改neutron配置文件权限<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">chown -R root:neutron /etc/neutron/neutron.conf</span><br></pre></td></tr></table></figure></p>
+<p>备份ml2,route,dhcp,metadata的配置文件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">mv /etc/neutron/l3_agent.ini /etc/neutron/l3_agent.ini.bak</span><br><span class="line">mv /etc/neutron/dhcp_agent.ini /etc/neutron/dhcp_agent.ini.bak</span><br><span class="line">mv /etc/neutron/metadata_agent.ini /etc/neutron/metadata_agent.ini.bak</span><br><span class="line">mv /etc/neutron/plugins/ml2/ml2_conf.ini /etc/neutron/plugins/ml2/ml2_conf.ini.bak</span><br></pre></td></tr></table></figure></p>
+<p>分别创建ml2,route,dhcp,metadata的配置文件<br>vi /etc/neutron/l3_agent.ini<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver</span><br><span class="line">use_namespaces = True</span><br><span class="line">verbose = True</span><br></pre></td></tr></table></figure></p>
+<p>vi /etc/neutron/dhcp_agent.ini<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver</span><br><span class="line">dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq</span><br><span class="line">use_namespaces = True</span><br><span class="line">verbose = True</span><br></pre></td></tr></table></figure></p>
+<p>vi /etc/neutron/metadata_agent.ini<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">verbose = True</span><br><span class="line">auth_url = http://controller:5000/v2.0</span><br><span class="line">auth_region = regionOne</span><br><span class="line">admin_tenant_name = service</span><br><span class="line">admin_user = neutron</span><br><span class="line">admin_password = NEUTRON_PASS</span><br><span class="line">nova_metadata_ip = controller</span><br><span class="line">metadata_proxy_shared_secret = neutron</span><br></pre></td></tr></table></figure></p>
+<p>vi /etc/neutron/plugins/ml2/ml2_conf.ini<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">[ml2]</span><br><span class="line">type_drivers = gre</span><br><span class="line">tenant_network_types = gre</span><br><span class="line">mechanism_drivers = openvswitch</span><br><span class="line">[ml2_type_flat]</span><br><span class="line">[ml2_type_vlan]</span><br><span class="line">[ml2_type_gre]</span><br><span class="line">tunnel_id_ranges = 1:1000</span><br><span class="line">[ml2_type_vxlan]</span><br><span class="line">[securitygroup]</span><br><span class="line">firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver</span><br><span class="line">enable_security_group = True</span><br><span class="line">[ovs]</span><br><span class="line">local_ip = 10.0.1.21</span><br><span class="line">tunnel_type = gre</span><br><span class="line">enable_tunneling = True</span><br></pre></td></tr></table></figure></p>
+<p>启动ovs服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">service openvswitch start</span><br><span class="line">chkconfig openvswitch on</span><br></pre></td></tr></table></figure></p>
+<p>创建虚拟网桥br-int作为内部连接网桥,br-ex作为实例访问外网的桥<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-br br-int</span><br><span class="line">ovs-vsctl add-br br-ex</span><br></pre></td></tr></table></figure></p>
+<p>绑定br-ex在eth2接口,并且禁用GRO</p>
+<blockquote>
+<p>现在大多数网卡都具有LRO/GRO功能，即网卡收包时将同一流的小包合并成大包,LVS内核模块在处理&gt;MTU的数据包时会丢弃；<br>因此我们可以选择禁用<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ovs-vsctl add-port br-ex eth2</span><br><span class="line">ethtool -K eth2 gro off</span><br></pre></td></tr></table></figure></p>
+</blockquote>
+<p>创建ml2配置文件软连接<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ln -s /etc/neutron/plugins/ml2/ml2_conf.ini /etc/neutron/plugin.ini</span><br></pre></td></tr></table></figure></p>
+<p>OVS_Agent的软件包有一个BUG,初始化脚本是从/etc/neutron/plugin.ini中获取插件配置,需要执行下面的命令修复它<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">cp /etc/init.d/neutron-openvswitch-agent /etc/init.d/neutron-openvswitch-agent.orig</span><br><span class="line">sed -i <span class="string">'s,plugins/openvswitch/ovs_neutron_plugin.ini,plugin.ini,g'</span> /etc/init.d/neutron-openvswitch-agent</span><br></pre></td></tr></table></figure></p>
+<p>启动服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">service neutron-openvswitch-agent start</span><br><span class="line">service neutron-l3-agent start</span><br><span class="line">service neutron-dhcp-agent start</span><br><span class="line">service neutron-metadata-agent start</span><br><span class="line">chkconfig neutron-openvswitch-agent on</span><br><span class="line">chkconfig neutron-l3-agent on</span><br><span class="line">chkconfig neutron-dhcp-agent on</span><br><span class="line">chkconfig neutron-metadata-agent on</span><br></pre></td></tr></table></figure></p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Openstack I版部署安装(五)]]></title>
+      <url>/2015/04/02/openstack_i%E7%89%88%E6%9C%AC%E9%83%A8%E7%BD%B25/</url>
+      <content type="html"><![CDATA[<h2 id="部署配置Compute计算节点"><a href="#部署配置Compute计算节点" class="headerlink" title="部署配置Compute计算节点"></a>部署配置Compute计算节点</h2><h3 id="安装nova-compute"><a href="#安装nova-compute" class="headerlink" title="安装nova-compute"></a>安装nova-compute</h3><p>安装nova-compute的相关组件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install openstack-nova-compute MySQL-python -y</span><br></pre></td></tr></table></figure></p>
+<p>安装ceph-fuse客户端,以便可以访问cephfs文件系统<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install ceph ceph-fuse -y</span><br></pre></td></tr></table></figure></p>
+<p>添加compute节点访问MDS的认证权限<br>在ceph-node01上执行,获取密钥值并且写入compute节点的目录下<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ceph auth get-or-create client.fuse | ssh compute01 tee /ect/ceph/ceph.client.fuse.keyring</span><br></pre></td></tr></table></figure></p>
+<p>同步ceph配置文件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">scp -r root@ceph-node01:/etc/ceph/ceph.conf root@compute01:/etc/ceph/</span><br></pre></td></tr></table></figure></p>
+<p>启动ceph-fuse挂载cephfs到nova实例目录,必须加上id和key参数<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ceph-fuse -m ceph-node01:6789 /var/lib/nova/instances --id fuse --keyring=/etc/ceph/ceph.client.fuse.keyring</span><br></pre></td></tr></table></figure></p>
+<p>写入启动脚本实现开机自动挂载<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> <span class="string">"ceph-fuse -m ceph-node01:6789 /var/lib/nova/instances --id fuse --keyring=/etc/ceph/ceph.client.fuse.keyring"</span> &gt;&gt; /etc/rc.local</span><br></pre></td></tr></table></figure></p>
+<p>改变实例目录所属的用户权限<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">chown -R nova:nova /var/lib/nova/instances</span><br></pre></td></tr></table></figure></p>
+<p>启动libvirt管理服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">service libvirtd start</span><br><span class="line">chkconfig libvirtd on</span><br></pre></td></tr></table></figure></p>
+<blockquote>
+<p>由于nova实例的虚拟磁盘也需要使用ceph rbd,libvrit在信任cephx认证时是需要把id和key绑定virsh的secret</p>
+</blockquote>
+<p>创建一个临时的xml文件指定一些virsh密钥的基本参数<br>vi secret.xml<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&lt;secret ephemeral=<span class="string">'no'</span> private=<span class="string">'no'</span>&gt;</span><br><span class="line">  &lt;usage <span class="built_in">type</span>=<span class="string">'ceph'</span>&gt;</span><br><span class="line">    &lt;name&gt;client.volumes secret&lt;/name&gt;</span><br><span class="line">  &lt;/usage&gt;</span><br><span class="line">&lt;/secret&gt;</span><br></pre></td></tr></table></figure></p>
+<p>创建一个virsh密钥<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">virsh secret-define --file secret.xml</span><br><span class="line">返回结果是密钥串</span><br><span class="line">Secret 9a508d43-9695-ca2c-973b-840836e22b31 created</span><br></pre></td></tr></table></figure></p>
+<p>把virsh密钥与volumes池的key以base64编码格式绑定<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">virsh secret-set-value --secret 9a508d43-9695-ca2c-973b-840836e22b31 --base64 AQCEWRpVGDOsCBAAuGIEzp/FkCc6KPQSaFGAbw==</span><br></pre></td></tr></table></figure></p>
+<p>备份nova配置文件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mv /etc/nova/nova.conf /etc/nova/nova.conf.bak</span><br></pre></td></tr></table></figure></p>
+<p>创建nova配置文件</p>
+<blockquote>
+<p>注意rbd_secret_uuid使用的是libvirt绑定之后的密钥值<br>笔者这里就是 9a508d43-9695-ca2c-973b-840836e22b31</p>
+</blockquote>
+<p>vi /etc/nova/nova.conf<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">auth_strategy = keystone</span><br><span class="line">rpc_backend = qpid</span><br><span class="line">qpid_hostname = controller</span><br><span class="line">my_ip = 10.0.0.31</span><br><span class="line">vnc_enabled = True</span><br><span class="line">vncserver_listen = 0.0.0.0</span><br><span class="line">vncserver_proxyclient_address = 10.0.0.31</span><br><span class="line">novncproxy_base_url = http://controller:6080/vnc_auto.html</span><br><span class="line">glance_host = controller</span><br><span class="line">libvirt_inject_password=<span class="literal">false</span></span><br><span class="line">libvirt_inject_key=<span class="literal">false</span></span><br><span class="line">libvirt_inject_partition=-2</span><br><span class="line">libvirt_images_type=rbd</span><br><span class="line">libvirt_images_rbd_pool=volumes</span><br><span class="line">libvirt_images_rbd_ceph_conf=/etc/ceph/ceph.conf</span><br><span class="line">rbd_user=volumes</span><br><span class="line">rbd_secret_uuid= 9a508d43-9695-ca2c-973b-840836e22b31</span><br><span class="line">network_api_class = nova.network.neutronv2.api.API</span><br><span class="line">neutron_url = http://controller:9696</span><br><span class="line">neutron_auth_strategy = keystone</span><br><span class="line">neutron_admin_tenant_name = service</span><br><span class="line">neutron_admin_username = neutron</span><br><span class="line">neutron_admin_password = NEUTRON_PASS</span><br><span class="line">neutron_admin_auth_url = http://controller:35357/v2.0</span><br><span class="line">linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver</span><br><span class="line">firewall_driver = nova.virt.firewall.NoopFirewallDriver</span><br><span class="line">security_group_api = neutron</span><br><span class="line">[baremetal]</span><br><span class="line">[cells]</span><br><span class="line">[conductor]</span><br><span class="line">[database]</span><br><span class="line">connection = mysql://nova:NOVA_DBPASS@controller/nova</span><br><span class="line">[hyperv]</span><br><span class="line">[image_file_url]</span><br><span class="line">[keymgr]</span><br><span class="line">[keystone_authtoken]</span><br><span class="line">auth_uri = http://controller:5000</span><br><span class="line">auth_host = controller</span><br><span class="line">auth_protocol = http</span><br><span class="line">auth_port = 35357</span><br><span class="line">admin_user = nova</span><br><span class="line">admin_tenant_name = service</span><br><span class="line">admin_password = NOVA_PASS</span><br><span class="line">[libvirt]</span><br><span class="line">virt_type=kvm</span><br><span class="line">[matchmaker_ring]</span><br><span class="line">[metrics]</span><br><span class="line">[osapi_v3]</span><br><span class="line">[rdp]</span><br><span class="line">[spice]</span><br><span class="line">[ssl]</span><br><span class="line">[trusted_computing]</span><br><span class="line">[upgrade_levels]</span><br><span class="line">[vmware]</span><br><span class="line">[xenserver]</span><br><span class="line">[zookeeper]</span><br></pre></td></tr></table></figure></p>
+<p>修改配置文件权限<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">chown -R root:nova /etc/nova/nova.conf</span><br></pre></td></tr></table></figure></p>
+<h3 id="安装qemu-img"><a href="#安装qemu-img" class="headerlink" title="安装qemu-img"></a>安装qemu-img</h3><p>由于源自带的qemu-img版本不支持rbd格式的虚拟磁盘,需要重装带有ceph支持的版本.<br>笔者安装的是以下版本</p>
+<blockquote>
+<p>qemu-kvm-0.12.1.2-2.415.el6.3ceph.x86_64.rpm<br>qemu-img-0.12.1.2-2.415.el6.3ceph.x86_64.rpm</p>
+</blockquote>
+<p>启动nova相关服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">service messagebus start</span><br><span class="line">chkconfig messagebus on</span><br><span class="line">service openstack-nova-compute start</span><br><span class="line">chkconfig openstack-nova-compute on</span><br></pre></td></tr></table></figure></p>
+<p>同样的部署步骤添加compute02节点,同时要注意机器名和IP地址必须要修改为对应的</p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Openstack I版部署安装(四)]]></title>
+      <url>/2015/04/02/openstack_i%E7%89%88%E6%9C%AC%E9%83%A8%E7%BD%B24/</url>
+      <content type="html"><![CDATA[<h3 id="配置Cinder块设备存储"><a href="#配置Cinder块设备存储" class="headerlink" title="配置Cinder块设备存储"></a>配置Cinder块设备存储</h3><p>安装cinder组件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install openstack-cinder -y</span><br></pre></td></tr></table></figure></p>
+<p>备份cinder配置文件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mv /etc/cinder/cinder.conf /etc/cinder/cinder.conf.bak</span><br></pre></td></tr></table></figure></p>
+<p>创建cinder配置文件<br>vi /etc/cinder/cinder.conf</p>
+<blockquote>
+<p>注意rbd_secret_uuid为前面实际创建的值,笔者的环境中是: AQCEWRpVGDOsCBAAuGIEzp/FkCc6KPQSaFGAbw==</p>
+</blockquote>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">auth_strategy = keystone</span><br><span class="line">rpc_backend = cinder.openstack.common.rpc.impl_qpid</span><br><span class="line">qpid_hostname = controller</span><br><span class="line">volume_driver=cinder.volume.drivers.rbd.RBDDriver</span><br><span class="line">rbd_pool=volumes</span><br><span class="line">rbd_ceph_conf=/etc/ceph/ceph.conf</span><br><span class="line">rbd_flatten_volume_from_snapshot=<span class="literal">false</span></span><br><span class="line">rbd_max_clone_depth=5</span><br><span class="line">glance_api_version=2</span><br><span class="line">rbd_user=volumes</span><br><span class="line">rbd_secret_uuid= AQDEgllUyAslLxAAvExrAIZWzUOPHQk6M7GUgg==</span><br><span class="line">[BRCD_FABRIC_EXAMPLE]	</span><br><span class="line">[database]</span><br><span class="line">connection = mysql://cinder:CINDER_DBPASS@controller/cinder</span><br><span class="line">[<span class="built_in">fc</span>-zone-manager]</span><br><span class="line">[keymgr]</span><br><span class="line">[keystone_authtoken]</span><br><span class="line">auth_uri = http://controller:5000</span><br><span class="line">auth_host = controller</span><br><span class="line">auth_protocol = http</span><br><span class="line">auth_port = 35357</span><br><span class="line">admin_user = cinder</span><br><span class="line">admin_tenant_name = service</span><br><span class="line">admin_password = CINDER_PASS</span><br><span class="line">[matchmaker_ring]</span><br><span class="line">[ssl]</span><br></pre></td></tr></table></figure>
+<p>修改cinder配置文件权限<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">chown -R root:cinder /etc/cinder/cinder.conf</span><br></pre></td></tr></table></figure></p>
+<p>同步导入cinder数据库表<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">su -s /bin/sh -c &quot;cinder-manage db sync&quot; cinder</span><br></pre></td></tr></table></figure></p>
+<p>创建cinder用户、角色、端点服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">keystone user-create --name=cinder --pass=CINDER_PASS --email=cinder@example.com</span><br><span class="line">keystone user-role-add --user=cinder --tenant=service --role=admin</span><br><span class="line">keystone service-create --name=cinder --<span class="built_in">type</span>=volume --description=<span class="string">"OpenStack Block Storage"</span></span><br><span class="line">keystone endpoint-create \</span><br><span class="line">--service-id=$(keystone service-list | awk <span class="string">'/ volume / &#123;print $2&#125;'</span>) \</span><br><span class="line">--publicurl=http://controller:8776/v1/%\(tenant_id\)s \</span><br><span class="line">--internalurl=http://controller:8776/v1/%\(tenant_id\)s \</span><br><span class="line">--adminurl=http://controller:8776/v1/%\(tenant_id\)s</span><br><span class="line">keystone service-create --name=cinderv2 --<span class="built_in">type</span>=volumev2 --description=<span class="string">"OpenStack Block Storage v2"</span></span><br><span class="line">keystone endpoint-create \</span><br><span class="line">--service-id=$(keystone service-list | awk <span class="string">'/ volumev2 / &#123;print $2&#125;'</span>) \</span><br><span class="line">--publicurl=http://controller:8776/v2/%\(tenant_id\)s \</span><br><span class="line">--internalurl=http://controller:8776/v2/%\(tenant_id\)s \</span><br><span class="line">--adminurl=http://controller:8776/v2/%\(tenant_id\)s</span><br></pre></td></tr></table></figure></p>
+<p>修改volumes的cephx密钥权限<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">chown -R cinder:cinder /etc/ceph/ceph.client.volumes.keyring</span><br></pre></td></tr></table></figure></p>
+<p>启动cinder相关服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">service openstack-cinder-api start</span><br><span class="line">service openstack-cinder-scheduler start</span><br><span class="line">service openstack-cinder-volume start</span><br><span class="line">chkconfig openstack-cinder-api on</span><br><span class="line">chkconfig openstack-cinder-scheduler on</span><br><span class="line">chkconfig openstack-cinder-volume on</span><br></pre></td></tr></table></figure></p>
+<h4 id="Cinder创建volume硬盘卷验证"><a href="#Cinder创建volume硬盘卷验证" class="headerlink" title="Cinder创建volume硬盘卷验证"></a>Cinder创建volume硬盘卷验证</h4><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">[root@controller ~]<span class="comment"># cinder create --display-name test 1</span></span><br><span class="line">+---------------------+--------------------------------------+</span><br><span class="line">|       Property      |                Value                 |</span><br><span class="line">+---------------------+--------------------------------------+</span><br><span class="line">|     attachments     |                  []                  |</span><br><span class="line">|  availability_zone  |                 nova                 |</span><br><span class="line">|       bootable      |                <span class="literal">false</span>                 |</span><br><span class="line">|      created_at     |      2015-04-02T03:43:16.194522      |</span><br><span class="line">| display_description |                 None                 |</span><br><span class="line">|     display_name    |                 <span class="built_in">test</span>                 |</span><br><span class="line">|      encrypted      |                False                 |</span><br><span class="line">|          id         | d6b816e1-1dcc-4f37-9bad-9d3581834233 |</span><br><span class="line">|       metadata      |                  &#123;&#125;                  |</span><br><span class="line">|         size        |                  1                   |</span><br><span class="line">|     snapshot_id     |                 None                 |</span><br><span class="line">|     source_volid    |                 None                 |</span><br><span class="line">|        status       |               creating               |</span><br><span class="line">|     volume_type     |                 None                 |</span><br><span class="line">+---------------------+--------------------------------------+</span><br><span class="line">[root@controller ~]<span class="comment"># cinder list</span></span><br><span class="line">+--------------------------------------+-----------+--------------+------+-------------+----------+-------------+</span><br><span class="line">|                  ID                  |   Status  | Display Name | Size | Volume Type | Bootable | Attached to |</span><br><span class="line">+--------------------------------------+-----------+--------------+------+-------------+----------+-------------+</span><br><span class="line">| d6b816e1-1dcc-4f37-9bad-9d3581834233 | available |     <span class="built_in">test</span>     |  1   |     None    |  <span class="literal">false</span>   |             |</span><br><span class="line">+--------------------------------------+-----------+--------------+------+-------------+----------+-------------+</span><br></pre></td></tr></table></figure>
+<h3 id="配置Dashboard门户服务"><a href="#配置Dashboard门户服务" class="headerlink" title="配置Dashboard门户服务"></a>配置Dashboard门户服务</h3><p>安装dashboard组件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install memcached python-memcached mod_wsgi openstack-dashboard -y</span><br></pre></td></tr></table></figure></p>
+<p>修改dashboard配置</p>
+<blockquote>
+<p>vi /etc/openstack-dashboard/local_settings</p>
+</blockquote>
+<p>修改CACHES部分<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">CACHES = &#123;</span><br><span class="line">    <span class="string">'default'</span>: &#123;</span><br><span class="line">        <span class="string">'BACKEND'</span>:<span class="string">'django.core.cache.backends.memcached.MemcachedCache'</span>,</span><br><span class="line">        <span class="string">'LOCATION'</span> : <span class="string">'127.0.0.1:11211'</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>修改可允许访问的主机名称<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ALLOWED_HOSTS = [<span class="string">'localhost'</span>, <span class="string">'controller'</span>, <span class="string">'10.0.0.11'</span>]</span><br></pre></td></tr></table></figure></p>
+<p>修改openstack主机名<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">OPENSTACK_HOST = <span class="string">"controller"</span></span><br></pre></td></tr></table></figure></p>
+<p>启动apache服务,分布式缓存服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">setsebool -P httpd_can_network_connect on</span><br><span class="line">service httpd start</span><br><span class="line">service memcached start</span><br><span class="line">chkconfig httpd on</span><br><span class="line">chkconfig memcached on</span><br></pre></td></tr></table></figure></p>
+<h4 id="Dashboard用户web访问"><a href="#Dashboard用户web访问" class="headerlink" title="Dashboard用户web访问"></a>Dashboard用户web访问</h4><p>浏览器访问 <a href="http://10.0.0.11/dashboard" target="_blank" rel="noopener">http://10.0.0.11/dashboard</a>  (建议使用chrome 或者 firefox)<br>login: admin<br>password: ADMIN_PASS</p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Openstack I版部署安装(三)]]></title>
+      <url>/2015/04/02/openstack_i%E7%89%88%E6%9C%AC%E9%83%A8%E7%BD%B23/</url>
+      <content type="html"><![CDATA[<h3 id="配置NOVA计算服务控制"><a href="#配置NOVA计算服务控制" class="headerlink" title="配置NOVA计算服务控制"></a>配置NOVA计算服务控制</h3><p>安装服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">yum install openstack-nova-api openstack-nova-cert openstack-nova-conductor \</span><br><span class="line">  openstack-nova-console openstack-nova-novncproxy openstack-nova-scheduler \</span><br><span class="line">  python-novaclient -y</span><br></pre></td></tr></table></figure></p>
+<p>同步ceph的配置文件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">scp -r root@ceph-node01:/etc/ceph/ceph.conf root@controller:/etc/ceph/</span><br></pre></td></tr></table></figure></p>
+<p>备份nova配置文件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mv /etc/nova/nova.conf /etc/nova/nova.conf.bak</span><br></pre></td></tr></table></figure></p>
+<p>创建新的nova.conf<br>vi /etc/nova/nova.conf<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">rpc_backend = qpid</span><br><span class="line">qpid_hostname = controller</span><br><span class="line">my_ip = 10.0.0.11</span><br><span class="line">vncserver_listen = 10.0.0.11</span><br><span class="line">vncserver_proxyclient_address = 10.0.0.11</span><br><span class="line">auth_strategy = keystone</span><br><span class="line">libvirt_images_type=rbd</span><br><span class="line">libvirt_images_rbd_pool=volumes</span><br><span class="line">libvirt_images_rbd_ceph_conf=/etc/ceph/ceph.conf</span><br><span class="line">rbd_user=volumes</span><br><span class="line">network_api_class = nova.network.neutronv2.api.API</span><br><span class="line">neutron_url = http://controller:9696</span><br><span class="line">neutron_auth_strategy = keystone</span><br><span class="line">neutron_admin_tenant_name = service</span><br><span class="line">neutron_admin_username = neutron</span><br><span class="line">neutron_admin_password = NEUTRON_PASS</span><br><span class="line">neutron_admin_auth_url = http://controller:35357/v2.0</span><br><span class="line">linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver</span><br><span class="line">firewall_driver = nova.virt.firewall.NoopFirewallDriver</span><br><span class="line">security_group_api = neutron</span><br><span class="line">service_neutron_metadata_proxy = <span class="literal">true</span></span><br><span class="line">neutron_metadata_proxy_shared_secret = neutron</span><br><span class="line">[baremetal]</span><br><span class="line">[cells]</span><br><span class="line">[conductor]</span><br><span class="line">[database]</span><br><span class="line">connection = mysql://nova:NOVA_DBPASS@controller/nova</span><br><span class="line">[hyperv]</span><br><span class="line">[image_file_url]</span><br><span class="line">[keymgr]</span><br><span class="line">[keystone_authtoken]</span><br><span class="line">auth_uri = http://controller:5000</span><br><span class="line">auth_host = controller</span><br><span class="line">auth_protocol = http</span><br><span class="line">auth_port = 35357</span><br><span class="line">admin_user = nova</span><br><span class="line">admin_tenant_name = service</span><br><span class="line">admin_password = NOVA_PASS</span><br><span class="line">[libvirt]</span><br><span class="line">virt_type=kvm</span><br><span class="line">[matchmaker_ring]</span><br><span class="line">[metrics]</span><br><span class="line">[osapi_v3]</span><br><span class="line">[rdp]</span><br><span class="line">[spice]</span><br><span class="line">[ssl]</span><br><span class="line">[trusted_computing]</span><br><span class="line">[upgrade_levels]</span><br><span class="line">[vmware]</span><br><span class="line">[xenserver]</span><br><span class="line">[zookeeper]</span><br></pre></td></tr></table></figure></p>
+<p>修改配置文件权限<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">chown -R root:nova /etc/nova/nova.conf</span><br></pre></td></tr></table></figure></p>
+<p>同步导入nova数据库表<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">su -s /bin/sh -c <span class="string">"nova-manage db sync"</span> nova</span><br></pre></td></tr></table></figure></p>
+<p>创建Nova管理员用户、角色、端点服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">keystone user-create --name=nova --pass=NOVA_PASS --email=nova@example.com</span><br><span class="line">keystone user-role-add --user=nova --tenant=service --role=admin</span><br><span class="line">keystone service-create --name=nova --<span class="built_in">type</span>=compute \</span><br><span class="line">  --description=<span class="string">"OpenStack Compute"</span></span><br><span class="line">keystone endpoint-create \</span><br><span class="line">--service-id=$(keystone service-list | awk <span class="string">'/ compute / &#123;print $2&#125;'</span>) \</span><br><span class="line">--publicurl=http://controller:8774/v2/%\(tenant_id\)s \</span><br><span class="line">--internalurl=http://controller:8774/v2/%\(tenant_id\)s \</span><br><span class="line">--adminurl=http://controller:8774/v2/%\(tenant_id\)s</span><br></pre></td></tr></table></figure></p>
+<p>启动nova相关服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">service openstack-nova-api start</span><br><span class="line">service openstack-nova-cert start</span><br><span class="line">service openstack-nova-consoleauth start</span><br><span class="line">service openstack-nova-scheduler start</span><br><span class="line">service openstack-nova-conductor start</span><br><span class="line">service openstack-nova-novncproxy start</span><br><span class="line">chkconfig openstack-nova-api on</span><br><span class="line">chkconfig openstack-nova-cert on</span><br><span class="line">chkconfig openstack-nova-consoleauth on</span><br><span class="line">chkconfig openstack-nova-scheduler on</span><br><span class="line">chkconfig openstack-nova-conductor on</span><br><span class="line">chkconfig openstack-nova-novncproxy on</span><br></pre></td></tr></table></figure></p>
+<h3 id="配置Glance镜像管理服务"><a href="#配置Glance镜像管理服务" class="headerlink" title="配置Glance镜像管理服务"></a>配置Glance镜像管理服务</h3><p>安装组件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install openstack-glance python-glanceclient -y</span><br></pre></td></tr></table></figure></p>
+<p>备份glance配置文件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">mv /etc/glance/glance-api.conf /etc/glance/glance-api.conf.bak</span><br><span class="line">mv /etc/glance/glance-registry.conf /etc/glance/glance-registry.conf.bak</span><br></pre></td></tr></table></figure></p>
+<p>创建api配置文件,其中指定ceph rbd 参数<br>vi /etc/glance/glance-api.conf<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">rpc_backend = qpid</span><br><span class="line">qpid_hostname = controller</span><br><span class="line">default_store=rbd</span><br><span class="line">rbd_store_user=images</span><br><span class="line">rbd_store_pool=images</span><br><span class="line">show_image_direct_url=True</span><br><span class="line">[database]</span><br><span class="line">connection = mysql://glance:GLANCE_DBPASS@controller/glance</span><br><span class="line">[keystone_authtoken]</span><br><span class="line">auth_uri = http://controller:5000</span><br><span class="line">auth_host = controller</span><br><span class="line">auth_port = 35357</span><br><span class="line">auth_protocol = http</span><br><span class="line">admin_tenant_name = service</span><br><span class="line">admin_user = glance</span><br><span class="line">admin_password = GLANCE_PASS</span><br><span class="line">[paste_deploy]</span><br><span class="line">flavor = keystone</span><br><span class="line">[store_type_location_strategy]</span><br></pre></td></tr></table></figure></p>
+<p>vi /etc/glance/glance-registry.conf<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">[DEFAULT]</span><br><span class="line">[database]</span><br><span class="line">connection = mysql://glance:GLANCE_DBPASS@controller/glance</span><br><span class="line">[keystone_authtoken]</span><br><span class="line">auth_uri = http://controller:5000</span><br><span class="line">auth_host = controller</span><br><span class="line">auth_port = 35357</span><br><span class="line">auth_protocol = http</span><br><span class="line">admin_tenant_name = service</span><br><span class="line">admin_user = glance</span><br><span class="line">admin_password = GLANCE_PASS</span><br><span class="line">[paste_deploy]</span><br><span class="line">flavor = keystone</span><br></pre></td></tr></table></figure></p>
+<p>修改配置文件权限<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">chown -R root:glance /etc/glance-api.conf</span><br><span class="line">chown -R root:glance /etc/glance-registry.conf</span><br></pre></td></tr></table></figure></p>
+<p>同步导入glance数据库表<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">su -s /bin/sh -c <span class="string">"glance-manage db_sync"</span> glance</span><br></pre></td></tr></table></figure></p>
+<p>创建glance用户、角色、端点服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">keystone user-create --name=glance --pass=GLANCE_PASS --email=glance@example.com</span><br><span class="line">keystone user-role-add --user=glance --tenant=service --role=admin</span><br><span class="line">keystone service-create --name=glance --<span class="built_in">type</span>=image --description=<span class="string">"OpenStack Image Service"</span></span><br><span class="line">keystone endpoint-create \</span><br><span class="line">--service-id=$(keystone service-list | awk <span class="string">'/ image / &#123;print $2&#125;'</span>) \</span><br><span class="line">--publicurl=http://controller:9292 \</span><br><span class="line">--internalurl=http://controller:9292 \</span><br><span class="line">--adminurl=http://controller:9292</span><br></pre></td></tr></table></figure></p>
+<p>修改ceph密钥权限<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">chown -R glance:glance /etc/ceph/ceph.client.images.keyring</span><br></pre></td></tr></table></figure></p>
+<p>启动glance相关服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">service openstack-glance-api start</span><br><span class="line">service openstack-glance-registry start</span><br><span class="line">chkconfig openstack-glance-api on</span><br><span class="line">chkconfig openstack-glance-registry on</span><br></pre></td></tr></table></figure></p>
+<h4 id="Glance创建image镜像"><a href="#Glance创建image镜像" class="headerlink" title="Glance创建image镜像"></a>Glance创建image镜像</h4><p>下载cirrros镜像文件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">wget http://cdn.download.cirros-cloud.net/0.3.2/cirros-0.3.2-x86_64-disk.img</span><br></pre></td></tr></table></figure></p>
+<p>上传到glance管理<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">glance image-create --name <span class="string">"cirros-0.3.2-x86_64"</span> --disk-format qcow2 --container-format bare --is-public True --progress &lt; cirros-0.3.2-x86_64-disk.img</span><br></pre></td></tr></table></figure></p>
+<p>查看上传好的镜像,active为正常状态<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@controller ~]<span class="comment"># glance image-list</span></span><br><span class="line">+--------------------------------------+---------------------+-------------+------------------+----------+--------+</span><br><span class="line">| ID                                   | Name                | Disk Format | Container Format | Size     | Status |</span><br><span class="line">+--------------------------------------+---------------------+-------------+------------------+----------+--------+</span><br><span class="line">| 1d21b295-ceba-47b5-a0d7-611e77659cf2 | cirros-0.3.2-x86_64 | qcow2       | bare             | 13167616 | active |</span><br><span class="line">+--------------------------------------+---------------------+-------------+------------------+----------+--------+</span><br></pre></td></tr></table></figure></p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Openstack I版部署安装(二)]]></title>
+      <url>/2015/04/01/openstack_i%E7%89%88%E6%9C%AC%E9%83%A8%E7%BD%B22/</url>
+      <content type="html"><![CDATA[<p>通过Ceph-Deploy部署了3节点的Ceph分布式存储后,先要为openstack的集成做配置准备</p>
+<h2 id="配置Ceph集成准备"><a href="#配置Ceph集成准备" class="headerlink" title="配置Ceph集成准备"></a>配置Ceph集成准备</h2><p>在ceph-node01上<br>创建卷池和镜像池,分别用来存放cinder卷,实例卷,和镜像<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">rados mkpool volumes</span><br><span class="line">rados mkpool images</span><br></pre></td></tr></table></figure></p>
+<p>增加两个pool的复制水平,设置为两份<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ceph osd pool <span class="built_in">set</span> volumes size 2</span><br><span class="line">ceph osd pool <span class="built_in">set</span> images size 2</span><br></pre></td></tr></table></figure></p>
+<p>创建cephx安全认证的密钥<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ceph auth get-or-create client.volumes mon <span class="string">'allow r'</span> osd <span class="string">'allow class-read object_prefix rbd_children, allow rwx pool=volumes, allow rx pool=images'</span></span><br><span class="line">ceph auth get-or-create client.images mon <span class="string">'allow r'</span> osd <span class="string">'allow class-read object_prefix rbd_children, allow rwx pool=images'</span></span><br><span class="line">ceph auth get-or-create client.fuse mon <span class="string">'allow r'</span> mds <span class="string">'allow'</span> osd <span class="string">'allow *'</span></span><br></pre></td></tr></table></figure></p>
+<h2 id="配置Controller控制节点"><a href="#配置Controller控制节点" class="headerlink" title="配置Controller控制节点"></a>配置Controller控制节点</h2><h3 id="配置Ceph支持"><a href="#配置Ceph支持" class="headerlink" title="配置Ceph支持"></a>配置Ceph支持</h3><p>由于nova,glance,cinder都需要连接访问ceph存储,所以要现在controller节点上配置ceph的支持</p>
+<p>安装ceph组件<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install ceph -y</span><br></pre></td></tr></table></figure></p>
+<p>刚才创建了cephx的认证,这里在ceph-node01上要把key 文件指定<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">ceph auth get-or-create client.images | ssh controller  tee /etc/ceph/ceph.client.images.keyring</span><br><span class="line">-------</span><br><span class="line">[client.images]</span><br><span class="line">	key = AQCJWRpVQNqnGhAADmHIpPonmBts1Yrf+IOmrA==</span><br><span class="line"></span><br><span class="line">ceph auth get-or-create client.volumes | ssh controller  tee /etc/ceph/ceph.client.volumes.keyring</span><br><span class="line">-------</span><br><span class="line">[client.volumes]</span><br><span class="line">	key = AQCEWRpVGDOsCBAAuGIEzp/FkCc6KPQSaFGAbw==</span><br></pre></td></tr></table></figure></p>
+<blockquote>
+<p>这里必须要记住volume的key值 AQCEWRpVGDOsCBAAuGIEzp/FkCc6KPQSaFGAbw==</p>
+</blockquote>
+<h3 id="配置MYSQL数据库"><a href="#配置MYSQL数据库" class="headerlink" title="配置MYSQL数据库"></a>配置MYSQL数据库</h3><p>安装MYSQL数据库<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install mysql mysql-server MySQL-python -y</span><br></pre></td></tr></table></figure></p>
+<blockquote>
+<p>vi /etc/my.cnf<br>在 [mysqld_safe] 前面添加以下<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">bind</span>-address = 0.0.0.0</span><br><span class="line">default-storage-engine = innodb</span><br><span class="line">innodb_file_per_table</span><br><span class="line">collation-server = utf8_general_ci</span><br><span class="line">init-connect = <span class="string">'SET NAMES utf8'</span></span><br><span class="line">character-set-server = utf8</span><br></pre></td></tr></table></figure></p>
+</blockquote>
+<p>启动服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">service mysqld start</span><br><span class="line">chkconfig mysqld on</span><br></pre></td></tr></table></figure></p>
+<p>删除默认数据表,同时设置mysql密码<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">mysql_install_db</span><br><span class="line">mysql_secure_installation</span><br></pre></td></tr></table></figure></p>
+<p>创建数据库与用户<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">mysql -u root -p</span><br><span class="line">create database keystone;</span><br><span class="line">create database glance;</span><br><span class="line">create database nova;</span><br><span class="line">create database cinder;</span><br><span class="line">create database dashboard;</span><br><span class="line">create database neutron;</span><br><span class="line">GRANT ALL PRIVILEGES ON keystone.* TO <span class="string">'keystone'</span>@<span class="string">'localhost'</span> IDENTIFIED BY <span class="string">'KEYSTONE_DBPASS'</span>;</span><br><span class="line">GRANT ALL PRIVILEGES ON keystone.* TO <span class="string">'keystone'</span>@<span class="string">'%'</span> IDENTIFIED BY <span class="string">'KEYSTONE_DBPASS'</span>;</span><br><span class="line">GRANT ALL PRIVILEGES ON glance.* TO <span class="string">'glance'</span>@<span class="string">'localhost'</span> IDENTIFIED BY <span class="string">'GLANCE_DBPASS'</span>;</span><br><span class="line">GRANT ALL PRIVILEGES ON glance.* TO <span class="string">'glance'</span>@<span class="string">'%'</span> IDENTIFIED BY <span class="string">'GLANCE_DBPASS'</span>;</span><br><span class="line">GRANT ALL PRIVILEGES ON nova.* TO <span class="string">'nova'</span>@<span class="string">'localhost'</span> IDENTIFIED BY <span class="string">'NOVA_DBPASS'</span>;</span><br><span class="line">GRANT ALL PRIVILEGES ON nova.* TO <span class="string">'nova'</span>@<span class="string">'%'</span> IDENTIFIED BY <span class="string">'NOVA_DBPASS'</span>;</span><br><span class="line">GRANT ALL PRIVILEGES ON cinder.* TO <span class="string">'cinder'</span>@<span class="string">'localhost'</span> IDENTIFIED BY <span class="string">'CINDER_DBPASS'</span>;</span><br><span class="line">GRANT ALL PRIVILEGES ON cinder.* TO <span class="string">'cinder'</span>@<span class="string">'%'</span> IDENTIFIED BY <span class="string">'CINDER_DBPASS'</span>;</span><br><span class="line">GRANT ALL PRIVILEGES ON dashboard.* TO <span class="string">'dashboard'</span>@<span class="string">'localhost'</span> IDENTIFIED BY <span class="string">'DASHBOARD_DBPASS'</span>;</span><br><span class="line">GRANT ALL PRIVILEGES ON dashboard.* TO <span class="string">'dashboard'</span>@<span class="string">'%'</span> IDENTIFIED BY <span class="string">'DASHBOARD_DBPASS'</span>;</span><br><span class="line">GRANT ALL PRIVILEGES ON neutron.* TO <span class="string">'neutron'</span>@<span class="string">'localhost'</span> IDENTIFIED BY <span class="string">'NEUTRON_DBPASS'</span>;</span><br><span class="line">GRANT ALL PRIVILEGES ON neutron.* TO <span class="string">'neutron'</span>@<span class="string">'%'</span> IDENTIFIED BY <span class="string">'NEUTRON_DBPASS'</span>;</span><br><span class="line">quit;</span><br></pre></td></tr></table></figure></p>
+<h3 id="配置Qpid消息队列服务"><a href="#配置Qpid消息队列服务" class="headerlink" title="配置Qpid消息队列服务"></a>配置Qpid消息队列服务</h3><p>安装qpid服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install qpid-cpp-server -y</span><br></pre></td></tr></table></figure></p>
+<p>修改配置文件,取消qpid认证<br>vi /etc/qpidd.conf<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">auth=no</span><br></pre></td></tr></table></figure></p>
+<p>启动服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">service qpidd start</span><br><span class="line">chkconfig qpidd on</span><br></pre></td></tr></table></figure></p>
+<h3 id="配置Keystone身份验证服务"><a href="#配置Keystone身份验证服务" class="headerlink" title="配置Keystone身份验证服务"></a>配置Keystone身份验证服务</h3><p>安装keystone<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install openstack-keystone python-keystoneclient -y</span><br></pre></td></tr></table></figure></p>
+<p>修改keystone配置文件,添加数据库相关设置</p>
+<blockquote>
+<p>vi /etc/keystone/keystone.conf<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[database]</span><br><span class="line">connection = mysql://keystone:KEYSTONE_DBPASS@controller/keystone</span><br></pre></td></tr></table></figure></p>
+</blockquote>
+<p>同步导入keystone数据表<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">su -s /bin/sh -c <span class="string">"keystone-manage db_sync"</span> keystone</span><br></pre></td></tr></table></figure></p>
+<p>使用SSL来创建一个随机的token并且保存在keystone配置文件,作为Identity服务与其他服务之间的共享认证<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ADMIN_TOKEN=$(openssl rand -hex 10)</span><br><span class="line"><span class="built_in">echo</span> ADMIN_TOKEN</span><br><span class="line">    9cc44d1fc319c33b6d12    <span class="comment">#此为笔者环境输出,请参考实际</span></span><br></pre></td></tr></table></figure></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">openstack-config --<span class="built_in">set</span> /etc/keystone/keystone.conf DEFAULT admin_token 9cc44d1fc319c33b6d12</span><br></pre></td></tr></table></figure>
+<p>默认情况下,keystone是用PKI即公钥基础设施来作为象征,这里要创建一个简单的密钥和证书,并且限定访问权限</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">keystone-manage pki_setup --keystone-user keystone --keystone-group keystone</span><br><span class="line">chown -R keystone:keystone /etc/keystone/ssl</span><br><span class="line">chmod -R o-rwx /etc/keystone/ssl</span><br></pre></td></tr></table></figure>
+<p>启动服务<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">service openstack-keystone start</span><br><span class="line">chkconfig openstack-keystone on</span><br></pre></td></tr></table></figure></p>
+<p>定时记录keystone日志</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(crontab -l -u keystone 2&gt;&amp;1 | grep -q token_flush) || <span class="built_in">echo</span> <span class="string">'@hourly /usr/bin/keystone-manage token_flush &gt;/var/log/keystone/keystone-tokenflush.log 2&gt;&amp;1'</span> &gt;&gt; /var/spool/cron/keystone</span><br></pre></td></tr></table></figure>
+<p>创建admin token<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> OS_SERVICE_TOKEN=<span class="variable">$ADMIN_TOKEN</span></span><br><span class="line"><span class="built_in">export</span> OS_SERVICE_ENDPOINT=http://controller:35357/v2.0</span><br><span class="line">keystone user-create --name=admin --pass=ADMIN_PASS --email=ADMIN_EMAIL</span><br><span class="line">keystone role-create --name=admin</span><br><span class="line">keystone tenant-create --name=admin --description=<span class="string">"Admin Tenant"</span></span><br><span class="line">keystone tenant-create --name=service --description=<span class="string">"Service Tenant"</span></span><br><span class="line">keystone user-role-add --user=admin --tenant=admin --role=admin</span><br><span class="line">keystone user-role-add --user=admin --role=_member_ --tenant=admin</span><br><span class="line">keystone service-create --name=keystone --<span class="built_in">type</span>=identity --description=<span class="string">"OpenStack Identity"</span></span><br><span class="line">keystone endpoint-create \</span><br><span class="line">--service-id=$(keystone service-list | awk <span class="string">'/ identity / &#123;print $2&#125;'</span>) \</span><br><span class="line">--publicurl=http://controller:5000/v2.0 \</span><br><span class="line">--internalurl=http://controller:5000/v2.0 \</span><br><span class="line">--adminurl=http://controller:35357/v2.0</span><br></pre></td></tr></table></figure></p>
+<blockquote>
+<p>创建导入admin用户的环境变量,注意在controller节点执行任何相关命令必须确保已经导入环境变量</p>
+</blockquote>
+<p>vi admin-openrc.sh</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">export</span> OS_USERNAME=admin</span><br><span class="line"><span class="built_in">export</span> OS_PASSWORD=ADMIN_PASS</span><br><span class="line"><span class="built_in">export</span> OS_TENANT_NAME=admin</span><br><span class="line"><span class="built_in">export</span> OS_AUTH_URL=http://controller:35357/v2.0</span><br></pre></td></tr></table></figure>
+<p>每次重启或者退出终端后都必须执行<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">source</span> admin-openrc.sh</span><br></pre></td></tr></table></figure></p>
+<p>查看admin用户角色<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">keystone user-list</span><br><span class="line">+----------------------------------+---------+---------+---------------------+</span><br><span class="line">|                id                |   name  | enabled |        email        |</span><br><span class="line">+----------------------------------+---------+---------+---------------------+</span><br><span class="line">| 8c261c540a974f7ab81f883c9abed690 |  admin  |   True  |     ADMIN_EMAIL     |</span><br><span class="line">+----------------------------------+---------+---------+---------------------+</span><br></pre></td></tr></table></figure></p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Openstack I版部署安装(一)]]></title>
+      <url>/2015/04/01/openstack_i%E7%89%88%E6%9C%AC%E9%83%A8%E7%BD%B21/</url>
+      <content type="html"><![CDATA[<h2 id="前提"><a href="#前提" class="headerlink" title="前提"></a>前提</h2><p>Openstack I 版本 结合Ceph分布式存储的手工安装过程记录.(仅供参考)</p>
+<p>希望分享给任何有需要的人,在安装过程中会加上一些自己的见解,感谢各位.</p>
+<h2 id="网络拓扑"><a href="#网络拓扑" class="headerlink" title="网络拓扑"></a>网络拓扑</h2><p><img src="http://img.blog.csdn.net/20150401222211523" alt="物理拓扑图"></p>
+<p><img src="http://img.blog.csdn.net/20150401222242349" alt="逻辑拓扑图"></p>
+<h2 id="IP地址规划"><a href="#IP地址规划" class="headerlink" title="IP地址规划"></a>IP地址规划</h2><table>
+<thead>
+<tr>
+<th>Hostname</th>
+<th>Management(eth0)</th>
+<th>Gateway(eth0)</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>controller</td>
+<td>10.0.0.11/24</td>
+<td>10.0.0.2</td>
+<td>Controller Node</td>
+</tr>
+<tr>
+<td>neutron</td>
+<td>10.0.0.21/24</td>
+<td>10.0.0.2</td>
+<td>Network Node</td>
+</tr>
+<tr>
+<td>compute01</td>
+<td>10.0.0.31/24</td>
+<td>10.0.0.2</td>
+<td>Compute Node</td>
+</tr>
+<tr>
+<td>compute02</td>
+<td>10.0.0.32/24</td>
+<td>10.0.0.2</td>
+<td>Compute Node</td>
+</tr>
+<tr>
+<td>ceph-node01</td>
+<td>10.0.0.41/24</td>
+<td>10.0.0.2</td>
+<td>MON/MDS Node</td>
+</tr>
+<tr>
+<td>ceph-node02</td>
+<td>10.0.0.42/24</td>
+<td>10.0.0.2</td>
+<td>OSD Node</td>
+</tr>
+<tr>
+<td>ceph-node03</td>
+<td>10.0.0.43/24</td>
+<td>10.0.0.2</td>
+<td>OSD Node</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<p>注意要求</p>
+<blockquote>
+<p>   neutron 主机拥有三块网卡,eth1 IP为10.0.1.21/24 无网关,eth2暂不配置<br>   compute主机拥有两块网卡,eth1 IP为10.0.1.31/24 , 10.0.1.32/24</p>
+</blockquote>
+<p>后端存储：统一使用ceph，提供rbd,cephfs,object storage<br>虚拟网络：GRE<br>基础操作系统：CentOS release 6.6 X86_64<br>Management：API调用,服务验证,调用存储<br>外网: 访问instances<br>计算节点：相互免密码登陆、使用共享存储、实现相互迁移</p>
+<h2 id="主机基本配置"><a href="#主机基本配置" class="headerlink" title="主机基本配置"></a>主机基本配置</h2><p>笔者所有的Host都是通过VMware Workstation虚拟的机器<br>版本信息如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[root@centos ~]<span class="comment"># lsb_release -a</span></span><br><span class="line">LSB Version:	:base-4.0-amd64:base-4.0-noarch:core-4.0-amd64:core-4.0-noarch</span><br><span class="line">Distributor ID:	CentOS</span><br><span class="line">Description:	CentOS release 6.6 (Final)</span><br><span class="line">Release:	6.6</span><br><span class="line">Codename:	Final</span><br></pre></td></tr></table></figure>
+<p><strong>所有主机都要配置以下设置</strong></p>
+<h3 id="配置Yum源"><a href="#配置Yum源" class="headerlink" title="配置Yum源"></a>配置Yum源</h3><p>删除系统默认源,防止源之间的冲突<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cd</span> /etc/yum.repo.d/</span><br><span class="line">rm -f *</span><br></pre></td></tr></table></figure></p>
+<p>添加epel源<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm -y</span><br></pre></td></tr></table></figure></p>
+<p>添加USTC源 (笔者比较习惯用这个)<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vim /etc/yum.repo.d/ustc.repo</span><br></pre></td></tr></table></figure></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">[ustc]</span><br><span class="line">name = ustc</span><br><span class="line">baseurl = http://centos.ustc.edu.cn/centos/6.6/os/x86_64/</span><br><span class="line">gpgcheck=0</span><br><span class="line"><span class="built_in">enable</span>=1</span><br><span class="line"></span><br><span class="line">[update]</span><br><span class="line">name = update</span><br><span class="line">baseurl = http://centos.ustc.edu.cn/centos/6.6/updates/x86_64/</span><br><span class="line">gpgcheck=0</span><br><span class="line"><span class="built_in">enable</span>=1</span><br><span class="line"></span><br><span class="line">[extras]</span><br><span class="line">name = extras</span><br><span class="line">baseurl = http://centos.ustc.edu.cn/centos/6.6/extras/x86_64/</span><br><span class="line">gpgcheck=0</span><br><span class="line"><span class="built_in">enable</span>=1</span><br></pre></td></tr></table></figure>
+<h3 id="导入RPM包签名信息"><a href="#导入RPM包签名信息" class="headerlink" title="导入RPM包签名信息"></a>导入RPM包签名信息</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-6</span><br></pre></td></tr></table></figure>
+<h3 id="关闭iptables和SELinux"><a href="#关闭iptables和SELinux" class="headerlink" title="关闭iptables和SELinux"></a>关闭iptables和SELinux</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">service iptables stop</span><br><span class="line">chkconfig --level 35 iptables off</span><br><span class="line">sed -i <span class="string">'s/enforcing/disabled/g'</span> /etc/selinux/config</span><br></pre></td></tr></table></figure>
+<h3 id="添加主机hosts解析"><a href="#添加主机hosts解析" class="headerlink" title="添加主机hosts解析"></a>添加主机hosts解析</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">vim /etc/hosts</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">10.0.0.11       controller</span><br><span class="line">10.0.0.21       neutron</span><br><span class="line">10.0.0.31       compute01</span><br><span class="line">10.0.0.32       compute02</span><br><span class="line">10.0.0.41       ceph-node01</span><br><span class="line">10.0.0.42       ceph-node02</span><br><span class="line">10.0.0.43       ceph-node03</span><br></pre></td></tr></table></figure>
+<h3 id="配置NTP时间服务器"><a href="#配置NTP时间服务器" class="headerlink" title="配置NTP时间服务器"></a>配置NTP时间服务器</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install ntp -y</span><br></pre></td></tr></table></figure>
+<p>把配置文件默认的NTP服务器注释掉,以Controller节点作为NTP服务器<br>在controller主机上设置NTP服务器<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> <span class="string">'server 127.127.1.0'</span> &gt;&gt; /etc/ntp.conf</span><br><span class="line"><span class="built_in">echo</span> <span class="string">'fudge	127.127.1.0 stratum 10'</span> &gt;&gt; /etc/ntp.conf</span><br><span class="line">service ntpd start</span><br><span class="line">chkconfig ntpd on</span><br></pre></td></tr></table></figure></p>
+<p>在其他主机上设置NTP客户端<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> <span class="string">'server controller'</span> &gt;&gt; /etc/ntp.conf</span><br><span class="line">service ntpd stop</span><br><span class="line">ntpdate controller ; hwclock -w</span><br><span class="line">service ntpd start</span><br><span class="line">chkconfig ntpd on</span><br></pre></td></tr></table></figure></p>
+<h3 id="配置Openstack-Yum源"><a href="#配置Openstack-Yum源" class="headerlink" title="配置Openstack Yum源"></a>配置Openstack Yum源</h3><p>在controller , neutron ,compute 节点上配置<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">yum install yum-plugin-priorities -y</span><br><span class="line">yum install http://repos.fedorapeople.org/repos/openstack/openstack-icehouse/rdo-release-icehouse-3.noarch.rpm -y</span><br><span class="line">yum install openstack-utils -y</span><br><span class="line">yum install openstack-selinux -y</span><br><span class="line">yum upgrade -y</span><br><span class="line">init 6</span><br></pre></td></tr></table></figure></p>
+<blockquote>
+<p>要注意的是:rdo-release-icehouse-3.noarch.rpm 这个包直接yum安装可能会出现网络不可达报错,可以先在电脑上通过浏览器下载然后上传安装.同时最后所有主机一定之执行upgrade , 因为现在icehouse最新的包是-4版本了,upgrade会自动更新的.并且可以减少需要依赖问题</p>
+</blockquote>
+<p>所有主机准备结束后开始先安装ceph分布式存储,这个可以参考上一遍博客Ceph快速部署</p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Openstack </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Ceph快速部署]]></title>
+      <url>/2015/03/25/ceph%E5%BF%AB%E9%80%9F%E9%83%A8%E7%BD%B2/</url>
+      <content type="html"><![CDATA[<p>这里不对Ceph做介绍,由于Ceph有多种部署方式,本文利用最方便得方式来部署,那么就是ceph-deploy</p>
+<h1 id="拓扑介绍"><a href="#拓扑介绍" class="headerlink" title="拓扑介绍"></a>拓扑介绍</h1><p> <img src="http://img.blog.csdn.net/20150325090522396" alt="这里写图片描述"></p>
+<h2 id="安装前准备"><a href="#安装前准备" class="headerlink" title="安装前准备."></a>安装前准备.</h2><h3 id="网络配置"><a href="#网络配置" class="headerlink" title="网络配置"></a>网络配置</h3><p>本文档部署全部基于CentOS6.6 x86_64发行版的Linux,笔者的环境是在Workstation上安装的虚拟机</p>
+<table>
+<thead>
+<tr>
+<th>Hostname</th>
+<th>Address</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ceph-admin</td>
+<td>10.0.0.40/24</td>
+<td>Deploy</td>
+</tr>
+<tr>
+<td>ceph-node1</td>
+<td>10.0.0.41/24</td>
+<td>MON/MDS</td>
+</tr>
+<tr>
+<td>ceph-node2</td>
+<td>10.0.0.42/24</td>
+<td>OSD0</td>
+</tr>
+<tr>
+<td>ceph-node3</td>
+<td>10.0.0.43/24</td>
+<td>OSD1</td>
+</tr>
+</tbody>
+</table>
+<p> 关闭防火墙<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">iptables -F</span><br><span class="line">service iptables stop</span><br><span class="line">chkconfig iptables off</span><br></pre></td></tr></table></figure></p>
+<h3 id="域名解析"><a href="#域名解析" class="headerlink" title="域名解析"></a>域名解析</h3><p>vi /etc/hosts 添加</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">10.0.0.40 ceph-admin</span><br><span class="line">10.0.0.41 ceph-node1</span><br><span class="line">10.0.0.42 ceph-node2</span><br><span class="line">10.0.0.43 ceph-node3</span><br></pre></td></tr></table></figure>
+<h3 id="YUM源配置"><a href="#YUM源配置" class="headerlink" title="YUM源配置"></a>YUM源配置</h3><p>删除系统自带源</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">rm /etc/yum.repo/CentOS-* -f</span><br></pre></td></tr></table></figure>
+<p>添加第三方Yum源<br>vi /etc/yum.repo/ustc.repo</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[ustc]</span><br><span class="line">name = ustc</span><br><span class="line">baseurl = http://centos.ustc.edu.cn/centos/6.6/os/x86_64/</span><br><span class="line">gpgcheck=0</span><br><span class="line"><span class="built_in">enable</span>=1</span><br></pre></td></tr></table></figure>
+<p>添加epel源<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">yum install http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm -y</span><br></pre></td></tr></table></figure></p>
+<p>执行更新<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">yum makecache</span><br><span class="line">yum upgrade</span><br><span class="line">yum install hdparm openssh-clients -y</span><br><span class="line">hdparm -W 0 /dev/sda               <span class="comment">#关闭硬盘写入缓存</span></span><br><span class="line">init 6</span><br></pre></td></tr></table></figure></p>
+<h2 id="集群部署"><a href="#集群部署" class="headerlink" title="集群部署"></a>集群部署</h2><h4 id="管理节点部署"><a href="#管理节点部署" class="headerlink" title="管理节点部署"></a>管理节点部署</h4><p>配置ceph-admin到其他ceph节点的无密码访问<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ssh-keygen</span><br></pre></td></tr></table></figure></p>
+<p>创建无密码的keypair文件,只需要按回车即可</p>
+<p>复制访问密钥到各个ceph-node节点<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ssh-copy-id root@ceph-node1</span><br><span class="line">ssh-copy-id root@ceph-node2</span><br><span class="line">ssh-copy-id root@ceph-node3</span><br></pre></td></tr></table></figure></p>
+<p>添加ceph源仓库<br>vi /etc/yum.repo/ceph.repo<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">[ceph-noarch]</span><br><span class="line">name=Ceph noarch packages</span><br><span class="line">baseurl=http://ceph.com/rpm/el6/noarch/</span><br><span class="line">enabled=1</span><br><span class="line">gpgcheck=0</span><br><span class="line"><span class="built_in">type</span>=rpm-md</span><br><span class="line">gpgkey=https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/release.asc</span><br></pre></td></tr></table></figure></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">yum install ceph-deploy -y</span><br><span class="line">mkdir ~/my-cluster                   <span class="comment">#创建my-cluster目录存放配置文件与密钥</span></span><br><span class="line"><span class="built_in">cd</span> ~/my-cluster                         <span class="comment"># 每次执行ceph-deploy命令最好都在这目录下执行</span></span><br><span class="line">ceph-deploy new ceph-node1          <span class="comment">#以ceph-node1为MON创建ceph.conf文件与密钥</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> <span class="string">'osd_pool_default_size = 2'</span> &gt;&gt;  ~/my-cluster/ceph.conf  <span class="comment">#设置默认的副本数</span></span><br><span class="line">ceph-deploy install ceph-node1 ceph-node2 ceph-node3  <span class="comment">#开始安装</span></span><br></pre></td></tr></table></figure>
+<p>自动安装过程过程需要点时间<br>最后以ceph-node3的安装完成为结束点,最后会检查一下version</p>
+<h4 id="创建Ceph-MON集群监视器"><a href="#创建Ceph-MON集群监视器" class="headerlink" title="创建Ceph MON集群监视器"></a>创建Ceph MON集群监视器</h4><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ceph-deploy mon create ceph-node1    </span><br><span class="line">ceph-deploy gatherkeys ceph-node1</span><br></pre></td></tr></table></figure>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">#创建osd目录</span><br><span class="line">ssh ceph-node2</span><br><span class="line">sudo mkdir /tmp/osd0</span><br><span class="line">exit</span><br><span class="line"></span><br><span class="line">ssh ceph-node3</span><br><span class="line">sudo mkdir /tmp/osd1</span><br><span class="line">exit</span><br></pre></td></tr></table></figure>
+<h4 id="创建Ceph-OSD数据节点"><a href="#创建Ceph-OSD数据节点" class="headerlink" title="创建Ceph OSD数据节点"></a>创建Ceph OSD数据节点</h4><p>准备OSD<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ceph-deploy --overwrite-conf osd prepare ceph-node2:/tmp/osd0 ceph-node3:/tmp/osd1</span><br></pre></td></tr></table></figure></p>
+<p>激活OSD<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ceph-deploy osd activate ceph-node2:/tmp/osd0 ceph-node3:/tmp/osd1</span><br></pre></td></tr></table></figure></p>
+<p>创建Ceph MDS元数据节点<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ceph-deploy --overwrite-conf mds create ceph-node1</span><br></pre></td></tr></table></figure></p>
+<p>在ceph-node1上检查集群健康状态, 会看到 <code>HEALTH_OK</code></p>
+<p>部署完毕<br>更多资料请参考www.ceph.com</p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Ceph </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
+      <title><![CDATA[Linux硬盘热插拔]]></title>
+      <url>/2014/09/18/Linux%E7%A1%AC%E7%9B%98%E7%83%AD%E6%8F%92%E6%8B%94/</url>
+      <content type="html"><![CDATA[<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> <span class="string">"- - -"</span> &gt; /sys/class/scsi_host/host0/scan</span><br></pre></td></tr></table></figure>
+<p>这个 scan 属性支持以”-“作为通配符，如以下命令可以执行让整个scsi_host 进行重新搜索，这个功能用于调试某些对热挺拔实现不完善的 SCSI 驱动程序很有用</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">cat /proc/scsi/scsi</span><br><span class="line">Host: scsi2 Channel: 00 Id: 00 Lun: 00</span><br><span class="line"></span><br><span class="line">  Vendor: VMware,  Model: VMware Virtual S Rev: 1.0 </span><br><span class="line"></span><br><span class="line">  Type:   Direct-Access                    ANSI  SCSI revision: 02</span><br><span class="line"></span><br><span class="line">Host: scsi2 Channel: 00 Id: 01 Lun: 00</span><br><span class="line"></span><br><span class="line">  Vendor: VMware,  Model: VMware Virtual S Rev: 1.0 </span><br><span class="line"></span><br><span class="line">  Type:   Direct-Access                    ANSI  SCSI revision: 02</span><br></pre></td></tr></table></figure>
+<p>host0处是host1，还是host2，取决于 cat /proc/scsi/scsi 之后的 scsi 驱动器的号</p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> Linux </tag>
+            
+        </tags>
+        
+    </entry>
+    
+  
+  
+</search>
