@@ -1015,6 +1015,74 @@
     </entry>
     
     <entry>
+      <title><![CDATA[vmware资源管理说明]]></title>
+      <url>/2014/09/26/vmware%E8%B5%84%E6%BA%90%E7%AE%A1%E7%90%86%E8%AF%B4%E6%98%8E/</url>
+      <content type="html"><![CDATA[<h2 id="资源分配配额"><a href="#资源分配配额" class="headerlink" title="资源分配配额"></a>资源分配配额</h2><p>份额指定虚拟机（或资源池）的相对<code>重要性</code>.</p>
+<p>如果某个虚拟机的资源份额是另一个虚拟机的两倍,则在这两个虚拟机争用资源时,第一个虚拟机有权消耗两倍于第二个虚拟机的资源.</p>
+<p>份额通常指定为<code>高、正常或低</code>,这些值将分别按<code>4:2:1</code> 的比例指定份额值.还可以选择自定义为各虚拟机分配特定的份额值(表示比例权重).</p>
+<p>指定份额仅对同级虚拟机或资源池(即在资源池层次结构中具有相同父级的虚拟机或资源池)有意义.同级将根据其相对份额值共享资源,该份额值受预留和限制的约束.为虚拟机分配份额时, 始终会相对于其他已打开</p>
+<p>电源的虚拟机来为该虚拟机指定优先级.</p>
+<p>例子:</p>
+<blockquote>
+<p>一个CPU资源为总8GHz的Esxi主机,运行2个配额为<code>正常</code>的虚拟机,则分别为4GHz,此时再启动一台配额为<code>高</code>的虚拟机, 然后变为2GHz,2GHz,4GHz, 新启动的为正常的两倍配额</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>设置</th>
+<th>CPU份额值</th>
+<th>内存份额值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>高</td>
+<td>每个虚拟CPU 2000份额</td>
+<td>每兆字节 20份额</td>
+</tr>
+<tr>
+<td>正常</td>
+<td>每个虚拟CPU 1000份额</td>
+<td>每兆字节 10份额</td>
+</tr>
+<tr>
+<td>低</td>
+<td>每个虚拟CPU 500份额</td>
+<td>每兆字节 5份额</td>
+</tr>
+</tbody>
+</table>
+<h2 id="资源分配预留"><a href="#资源分配预留" class="headerlink" title="资源分配预留"></a>资源分配预留</h2><p>预留指定保证为虚拟机分配的最少资源量.</p>
+<p>仅在有足够的未预留资源满足虚拟机的预留时，<code>vCenter Server</code> 或 ESXi 才允许您打开虚拟机电源.</p>
+<p>即使物理服务器负载较重, 服务器也会确保该资源量. 预留用具体单位GHz或MB表示.</p>
+<p>预留默认为 0. 可以指定预留以保证虚拟机始终可使用最少的必要 CPU 或内存量</p>
+<h2 id="资源分配限制"><a href="#资源分配限制" class="headerlink" title="资源分配限制"></a>资源分配限制</h2><p>限制功能为可以分配到虚拟机的 CPU、内存或存储 I/O 资源指定上限.</p>
+<p>服务器分配给虚拟机的资源可大于预留,但决不可大于限制, 即使系统上有未使用的资源也是如此. 限制用具</p>
+<p>体单位（兆赫兹 (GHz) 或兆字节 (MB) 或每秒 I/O 操作数）表示.</p>
+<p>CPU、内存和存储 I/O 资源限制默认为无限制.</p>
+<p>在大多数情况下，当内存限制为无限时，创建虚拟机时为其配置的内存量会成为其有效限制.</p>
+<p>多数情况下无需指定限制, 指定限制的优缺点如下：</p>
+<ul>
+<li>优点 — 如果开始时虚拟机的数量较少，并且您想对用户期望数量的虚拟机进行管理，则分配一个限制将非</li>
+</ul>
+<p>常有效。但随着用户添加的虚拟机数量增加，性能将会降低。因此，您可以通过指定限制来模拟减少可用</p>
+<p>资源。</p>
+<ul>
+<li>缺点 — 如果指定限制，可能会浪费闲置资源。系统不允许虚拟机使用的资源超过限制，即使系统未充分利</li>
+</ul>
+<p>用并且有闲置资源可用时也是如此。请仅在有充分理由的情况下指定限制</p>
+]]></content>
+      
+        
+        <tags>
+            
+            <tag> VMware </tag>
+            
+        </tags>
+        
+    </entry>
+    
+    <entry>
       <title><![CDATA[Linux硬盘热插拔]]></title>
       <url>/2014/09/18/Linux%E7%A1%AC%E7%9B%98%E7%83%AD%E6%8F%92%E6%8B%94/</url>
       <content type="html"><![CDATA[<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">echo</span> <span class="string">"- - -"</span> &gt; /sys/class/scsi_host/host0/scan</span><br></pre></td></tr></table></figure>
