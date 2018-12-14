@@ -6,10 +6,10 @@
       <title></title>
       <url>/2018/12/13/%E5%A4%84%E7%90%86Celery%E5%81%9C%E6%AD%A2%E6%B6%88%E8%B4%B9%E6%95%85%E9%9A%9C%E8%AE%B0%E5%BD%95/</url>
       <content type="html"><![CDATA[<hr>
-<p>title: Ceph快速部署</p>
-<p>date: 2015-03-25 12:34:39</p>
+<p>title: Celery故障处理</p>
+<p>date: 2018-12-14 15:23:53</p>
 <p>tags:</p>
-<p> - Ceph</p>
+<p> - Python</p>
 <p>-–</p>
 <h1 id="处理Celery停止消费故障记录"><a href="#处理Celery停止消费故障记录" class="headerlink" title="处理Celery停止消费故障记录"></a>处理Celery停止消费故障记录</h1><h2 id="问题描述"><a href="#问题描述" class="headerlink" title="问题描述"></a>问题描述</h2><p>某段时间, 正常运行的celery定时任务就会忽然停止运行, <code>celery_beat</code> 和 <code>celery_worker</code> 进程并无异常</p>
 <p>首先做了以下排查</p>
