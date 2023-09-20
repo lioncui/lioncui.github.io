@@ -1,0 +1,61 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description"><title>vmware资源管理说明 | LionCui的IT二三事</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/7.0.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/1.0.0/grids-responsive-min.css"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><meta name="generator" content="Hexo 4.2.1"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">vmware资源管理说明</h1><a id="logo" href="/.">LionCui的IT二三事</a><p class="description">爱分享的小狮子</p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/typing-cn/"><i class="fa fa-keyboard-o"> typing</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">vmware资源管理说明</h1><div class="post-meta">Sep 26, 2014</div><div class="post-content"><h2 id="资源分配配额"><a href="#资源分配配额" class="headerlink" title="资源分配配额"></a>资源分配配额</h2><p>份额指定虚拟机（或资源池）的相对<code>重要性</code>.</p>
+<p>如果某个虚拟机的资源份额是另一个虚拟机的两倍,则在这两个虚拟机争用资源时,第一个虚拟机有权消耗两倍于第二个虚拟机的资源.</p>
+<p>份额通常指定为<code>高、正常或低</code>,这些值将分别按<code>4:2:1</code> 的比例指定份额值.还可以选择自定义为各虚拟机分配特定的份额值(表示比例权重).</p>
+<p>指定份额仅对同级虚拟机或资源池(即在资源池层次结构中具有相同父级的虚拟机或资源池)有意义.同级将根据其相对份额值共享资源,该份额值受预留和限制的约束.为虚拟机分配份额时, 始终会相对于其他已打开</p>
+<p>电源的虚拟机来为该虚拟机指定优先级.</p>
+<p>例子:</p>
+<blockquote>
+<p>一个CPU资源为总8GHz的Esxi主机,运行2个配额为<code>正常</code>的虚拟机,则分别为4GHz,此时再启动一台配额为<code>高</code>的虚拟机, 然后变为2GHz,2GHz,4GHz, 新启动的为正常的两倍配额</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>设置</th>
+<th>CPU份额值</th>
+<th>内存份额值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>高</td>
+<td>每个虚拟CPU 2000份额</td>
+<td>每兆字节 20份额</td>
+</tr>
+<tr>
+<td>正常</td>
+<td>每个虚拟CPU 1000份额</td>
+<td>每兆字节 10份额</td>
+</tr>
+<tr>
+<td>低</td>
+<td>每个虚拟CPU 500份额</td>
+<td>每兆字节 5份额</td>
+</tr>
+</tbody>
+</table>
+<h2 id="资源分配预留"><a href="#资源分配预留" class="headerlink" title="资源分配预留"></a>资源分配预留</h2><p>预留指定保证为虚拟机分配的最少资源量.</p>
+<p>仅在有足够的未预留资源满足虚拟机的预留时，<code>vCenter Server</code> 或 ESXi 才允许您打开虚拟机电源.</p>
+<p>即使物理服务器负载较重, 服务器也会确保该资源量. 预留用具体单位GHz或MB表示.</p>
+<p>预留默认为 0. 可以指定预留以保证虚拟机始终可使用最少的必要 CPU 或内存量</p>
+<h2 id="资源分配限制"><a href="#资源分配限制" class="headerlink" title="资源分配限制"></a>资源分配限制</h2><p>限制功能为可以分配到虚拟机的 CPU、内存或存储 I/O 资源指定上限.</p>
+<p>服务器分配给虚拟机的资源可大于预留,但决不可大于限制, 即使系统上有未使用的资源也是如此. 限制用具</p>
+<p>体单位（兆赫兹 (GHz) 或兆字节 (MB) 或每秒 I/O 操作数）表示.</p>
+<p>CPU、内存和存储 I/O 资源限制默认为无限制.</p>
+<p>在大多数情况下，当内存限制为无限时，创建虚拟机时为其配置的内存量会成为其有效限制.</p>
+<p>多数情况下无需指定限制, 指定限制的优缺点如下：</p>
+<ul>
+<li>优点 — 如果开始时虚拟机的数量较少，并且您想对用户期望数量的虚拟机进行管理，则分配一个限制将非</li>
+</ul>
+<p>常有效。但随着用户添加的虚拟机数量增加，性能将会降低。因此，您可以通过指定限制来模拟减少可用</p>
+<p>资源。</p>
+<ul>
+<li>缺点 — 如果指定限制，可能会浪费闲置资源。系统不允许虚拟机使用的资源超过限制，即使系统未充分利</li>
+</ul>
+<p>用并且有闲置资源可用时也是如此。请仅在有充分理由的情况下指定限制</p>
+</div><div class="tags"><a href="/tags/VMware/">VMware</a></div><div class="post-nav"><a class="pre" href="/2015/03/25/ceph%E5%BF%AB%E9%80%9F%E9%83%A8%E7%BD%B2/">Ceph快速部署</a><a class="next" href="/2014/09/18/Linux%E7%A1%AC%E7%9B%98%E7%83%AD%E6%8F%92%E6%8B%94/">Linux硬盘热插拔</a></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/Golang/" style="font-size: 15px;">Golang</a> <a href="/tags/Python/" style="font-size: 15px;">Python</a> <a href="/tags/Openstack/" style="font-size: 15px;">Openstack</a> <a href="/tags/MQTT/" style="font-size: 15px;">MQTT</a> <a href="/tags/Linux/" style="font-size: 15px;">Linux</a> <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" style="font-size: 15px;">分布式</a> <a href="/tags/Ceph/" style="font-size: 15px;">Ceph</a> <a href="/tags/Docker/" style="font-size: 15px;">Docker</a> <a href="/tags/VMware/" style="font-size: 15px;">VMware</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2020/07/03/Raft%E5%85%B1%E8%AF%86%E7%AE%97%E6%B3%95%E7%9A%84%E6%B5%85%E5%87%BA/">Raft共识算法的浅出</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/12/14/%E5%A4%84%E7%90%86Celery%E5%81%9C%E6%AD%A2%E6%B6%88%E8%B4%B9%E6%95%85%E9%9A%9C%E8%AE%B0%E5%BD%95/">Celery故障处理</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/04/11/OTP%E5%8A%A8%E6%80%81%E5%AF%86%E7%A0%81%E5%AE%9E%E7%8E%B0%E4%B8%8E%E5%BA%94%E7%94%A8/">OTP动态密码实现与场景应用</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/03/19/MQTT%E5%AE%9E%E6%97%B6%E6%8E%A8%E9%80%81%E8%AE%BE%E8%AE%A1/">MQTT实时推送设计</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/03/01/Golang%E4%B8%BAPython%E7%BC%96%E5%86%99%E6%A8%A1%E5%9D%97/">Golang为Python编写模块</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/05/06/Tkinter%E5%BC%95%E5%85%A5%E5%9B%BE%E6%A0%87/">Tkinter如何引入图标</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/04/05/VPNaaS%E6%9C%8D%E5%8A%A1%E8%AF%B4%E6%98%8E/">VPNaaS服务说明</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/03/22/LBaaS%E6%9C%8D%E5%8A%A1%E8%AF%B4%E6%98%8E/">LBaaS服务说明</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/09/15/nova%E9%9B%86%E6%88%90docker%E9%83%A8%E7%BD%B2/">Nova集成Docker过程记录</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/07/23/%E8%87%AA%E5%AE%9A%E4%B9%89%E5%88%9B%E5%BB%BAOpenstack%E9%95%9C%E5%83%8F(Windows)/">自定义制作Windows2008R2 nova镜像</a></li></ul></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2023 <a href="/." rel="nofollow">LionCui的IT二三事.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><script type="text/javascript" src="//cdn.bootcss.com/fancybox/3.2.5/jquery.fancybox.min.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/fancybox/3.2.5/jquery.fancybox.min.css"><script type="text/javascript" src="/js/search.js?v=0.0.0"></script><script>var search_path = 'search.xml';
+if (search_path.length == 0) {
+   search_path = 'search.xml';
+}
+var path = '/' + search_path;
+searchFunc(path, 'local-search-input', 'local-search-result');
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>

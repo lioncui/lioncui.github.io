@@ -1,0 +1,37 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta http-equiv="content-type" content="text/html; charset=utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black-translucent" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="description"><title>VPNaaS服务说明 | LionCui的IT二三事</title><link rel="stylesheet" type="text/css" href="/css/style.css?v=0.0.0"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/normalize/7.0.0/normalize.min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/1.0.0/pure-min.css"><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/pure/1.0.0/grids-responsive-min.css"><link rel="stylesheet" href="//cdn.bootcss.com/font-awesome/4.7.0/css/font-awesome.min.css"><script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script><link rel="Shortcut Icon" type="image/x-icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="apple-touch-icon-precomposed" href="/apple-touch-icon.png"><meta name="generator" content="Hexo 4.2.1"></head><body><div class="body_container"><div id="header"><div class="site-name"><h1 class="hidden">VPNaaS服务说明</h1><a id="logo" href="/.">LionCui的IT二三事</a><p class="description">爱分享的小狮子</p></div><div id="nav-menu"><a class="current" href="/."><i class="fa fa-home"> 首页</i></a><a href="/archives/"><i class="fa fa-archive"> 归档</i></a><a href="/typing-cn/"><i class="fa fa-keyboard-o"> typing</i></a></div></div><div class="pure-g" id="layout"><div class="pure-u-1 pure-u-md-3-4"><div class="content_container"><div class="post"><h1 class="post-title">VPNaaS服务说明</h1><div class="post-meta">Apr 5, 2016</div><div class="post-content"><h1 id="VPNaaS服务说明"><a href="#VPNaaS服务说明" class="headerlink" title="VPNaaS服务说明"></a>VPNaaS服务说明</h1><h2 id="IPSec概念"><a href="#IPSec概念" class="headerlink" title="IPSec概念"></a>IPSec概念</h2><p>​    IPSec（Internet Protocol Security）是 IETF 制定的为保证在 Internet 上传送数据的安全保密性能的三层隧道加密协议.IPSec 在 IP 层对 IP 报文提供安全服务.IPSec 协议本身定义了如何在 IP 数据包中增加字段来保证 IP 包的完整性、私有性和真实性,以及如何加密数据包.使用 IPsec,数据就可以安全地在公网上传输.简单地说,IPsec 提供了两个主机之间、两个安全网关之间或主机和安全网关之间的保护.</p>
+<p>​    IPSec 协议:</p>
+<ol>
+<li>包括报文验证头协议AH(协议号51),供数据源认证、数据完整性校验和防报文重放功能</li>
+<li>报文安全封装协议ESP(协议号50),在AH之上,增加数据加密功能.</li>
+</ol>
+<p>​    IKE协议:</p>
+<ol>
+<li>使两个地点能够建立安全的连接,方法是使用事先共享的密钥或由一家认证机构管理的公钥基础结构(PKI)数字证书.</li>
+</ol>
+<p>​    IPSec 和 IKE 的关系:</p>
+<ol>
+<li>IKE是 UDP 之上的一个应用层协议,是 IPSEC 的信令协议</li>
+<li>IKE为 IPSEC 协商建立安全联盟,IPSEC 使用 IKE 建立的安全联盟对 IP 报文加密或验证处理.</li>
+<li>IPSEC 利用AH或者ESP在IP层对报文进行处理.</li>
+</ol>
+<p>​    IPSec传输模式</p>
+<ol>
+<li>transport - 适用于 pc to pc .</li>
+<li>tunnel - 适用于 site to site(ps - router, router - router)</li>
+</ol>
+<h2 id="VPNaaS使用"><a href="#VPNaaS使用" class="headerlink" title="VPNaaS使用"></a>VPNaaS使用</h2><ol>
+<li>创建配置IKE协议(包括名称, 算法, 生命周期等主要参数)</li>
+<li>创建配置IPSec协议(包括名称,算法,协议,生命周期等主要参数)</li>
+<li>创建配置VPN服务(选择对应的需要使用vpn的子网与对应的路由器)</li>
+<li>创建配置点对点链接(选择对应的IKE和IPSec和VPN服务,填写对端的路由ip)</li>
+</ol>
+<blockquote>
+<p>点对点链接需要双方同时建立,并且使用相同的IKE和IPSEC配置</p>
+</blockquote>
+</div><div class="tags"><a href="/tags/Openstack/">Openstack</a></div><div class="post-nav"><a class="pre" href="/2016/05/06/Tkinter%E5%BC%95%E5%85%A5%E5%9B%BE%E6%A0%87/">Tkinter如何引入图标</a><a class="next" href="/2016/03/22/LBaaS%E6%9C%8D%E5%8A%A1%E8%AF%B4%E6%98%8E/">LBaaS服务说明</a></div></div></div></div><div class="pure-u-1-4 hidden_mid_and_down"><div id="sidebar"><div class="widget"><div class="widget-title"><i class="fa fa-star-o"> 标签</i></div><div class="tagcloud"><a href="/tags/Golang/" style="font-size: 15px;">Golang</a> <a href="/tags/Python/" style="font-size: 15px;">Python</a> <a href="/tags/Openstack/" style="font-size: 15px;">Openstack</a> <a href="/tags/MQTT/" style="font-size: 15px;">MQTT</a> <a href="/tags/Linux/" style="font-size: 15px;">Linux</a> <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" style="font-size: 15px;">分布式</a> <a href="/tags/Ceph/" style="font-size: 15px;">Ceph</a> <a href="/tags/Docker/" style="font-size: 15px;">Docker</a> <a href="/tags/VMware/" style="font-size: 15px;">VMware</a></div></div><div class="widget"><div class="widget-title"><i class="fa fa-file-o"> 最近文章</i></div><ul class="post-list"><li class="post-list-item"><a class="post-list-link" href="/2020/07/03/Raft%E5%85%B1%E8%AF%86%E7%AE%97%E6%B3%95%E7%9A%84%E6%B5%85%E5%87%BA/">Raft共识算法的浅出</a></li><li class="post-list-item"><a class="post-list-link" href="/2018/12/14/%E5%A4%84%E7%90%86Celery%E5%81%9C%E6%AD%A2%E6%B6%88%E8%B4%B9%E6%95%85%E9%9A%9C%E8%AE%B0%E5%BD%95/">Celery故障处理</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/04/11/OTP%E5%8A%A8%E6%80%81%E5%AF%86%E7%A0%81%E5%AE%9E%E7%8E%B0%E4%B8%8E%E5%BA%94%E7%94%A8/">OTP动态密码实现与场景应用</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/03/19/MQTT%E5%AE%9E%E6%97%B6%E6%8E%A8%E9%80%81%E8%AE%BE%E8%AE%A1/">MQTT实时推送设计</a></li><li class="post-list-item"><a class="post-list-link" href="/2017/03/01/Golang%E4%B8%BAPython%E7%BC%96%E5%86%99%E6%A8%A1%E5%9D%97/">Golang为Python编写模块</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/05/06/Tkinter%E5%BC%95%E5%85%A5%E5%9B%BE%E6%A0%87/">Tkinter如何引入图标</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/04/05/VPNaaS%E6%9C%8D%E5%8A%A1%E8%AF%B4%E6%98%8E/">VPNaaS服务说明</a></li><li class="post-list-item"><a class="post-list-link" href="/2016/03/22/LBaaS%E6%9C%8D%E5%8A%A1%E8%AF%B4%E6%98%8E/">LBaaS服务说明</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/09/15/nova%E9%9B%86%E6%88%90docker%E9%83%A8%E7%BD%B2/">Nova集成Docker过程记录</a></li><li class="post-list-item"><a class="post-list-link" href="/2015/07/23/%E8%87%AA%E5%AE%9A%E4%B9%89%E5%88%9B%E5%BB%BAOpenstack%E9%95%9C%E5%83%8F(Windows)/">自定义制作Windows2008R2 nova镜像</a></li></ul></div></div></div><div class="pure-u-1 pure-u-md-3-4"><div id="footer">Copyright © 2023 <a href="/." rel="nofollow">LionCui的IT二三事.</a> Powered by<a rel="nofollow" target="_blank" href="https://hexo.io"> Hexo.</a><a rel="nofollow" target="_blank" href="https://github.com/tufu9441/maupassant-hexo"> Theme</a> by<a rel="nofollow" target="_blank" href="https://github.com/pagecho"> Cho.</a></div></div></div><a class="show" id="rocket" href="#top"></a><script type="text/javascript" src="/js/totop.js?v=0.0.0" async></script><script type="text/javascript" src="//cdn.bootcss.com/fancybox/3.2.5/jquery.fancybox.min.js" async></script><script type="text/javascript" src="/js/fancybox.js?v=0.0.0" async></script><link rel="stylesheet" type="text/css" href="//cdn.bootcss.com/fancybox/3.2.5/jquery.fancybox.min.css"><script type="text/javascript" src="/js/search.js?v=0.0.0"></script><script>var search_path = 'search.xml';
+if (search_path.length == 0) {
+   search_path = 'search.xml';
+}
+var path = '/' + search_path;
+searchFunc(path, 'local-search-input', 'local-search-result');
+</script><script type="text/javascript" src="/js/codeblock-resizer.js?v=0.0.0"></script><script type="text/javascript" src="/js/smartresize.js?v=0.0.0"></script></div></body></html>
